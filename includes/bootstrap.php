@@ -11,13 +11,46 @@ declare(strict_types=1);
 // db.php defines DB_* and APP_ENV constants used by the rest of bootstrap.
 require_once __DIR__ . '/db.php';
 
+/**
+ * Load config.local.php if present, and mirror its values into both
+ * getenv() (via putenv) and $_SERVER so the rest of the codebase can
+ * read them with either API. This is the bridge needed on hosts (GoDaddy
+ * shared cPanel) that block env[] in .user.ini / MultiPHP INI Editor.
+ *
+ * The file is .gitignored. See includes/config.local.example.php for shape.
+ */
+$localCfgPath = __DIR__ . '/config.local.php';
+if (is_file($localCfgPath)) {
+    $localCfg = require $localCfgPath;
+    if (is_array($localCfg)) {
+        // Keys like DB_SSL, SITE_URL, APP_ENV are critical on shared hosts
+        // (Namecheap, GoDaddy) that block env[] in .user.ini. Push every
+        // key into both getenv() and $_SERVER so the rest of the codebase
+        // can read them with either API.
+        foreach ($localCfg as $k => $v) {
+            $sv = is_bool($v) ? ($v ? '1' : '0') : (string)$v;
+            // Put in both places so getenv() AND $_SERVER lookups work.
+            if (getenv($k) === false) {
+                @putenv($k . '=' . $sv);
+            }
+            if (!isset($_SERVER[$k])) {
+                $_SERVER[$k] = $sv;
+            }
+        }
+    }
+}
+
 /* ---------------- site URL ---------------- */
 // Trusted public base URL used to build absolute links in emails, password
 // resets, and any other outbound URLs. NEVER use $_SERVER['HTTP_HOST'] for
 // this — attackers can poison the Host header to redirect victims.
 if (!defined('SITE_URL')) {
-    // Railway provides RAILWAY_PUBLIC_DOMAIN after public networking is enabled.
+    // Check env vars, $_SERVER (set by config.local.php bridge above),
+    // Railway's RAILWAY_PUBLIC_DOMAIN, then fall back to localhost.
     $env = getenv('SITE_URL');
+    if (($env === false || $env === '') && isset($_SERVER['SITE_URL']) && $_SERVER['SITE_URL'] !== '') {
+        $env = $_SERVER['SITE_URL'];
+    }
     $railway_domain = getenv('RAILWAY_PUBLIC_DOMAIN');
     define('SITE_URL', $env !== false && $env !== ''
         ? rtrim($env, '/')
@@ -73,14 +106,35 @@ require_once __DIR__ . '/jersey.php';
 require_once __DIR__ . '/upload.php';
 require_once __DIR__ . '/student_rendering.php';
 require_once __DIR__ . '/seed_check.php';
+require_once __DIR__ . '/mobile_sidebar.php';
+
+/* ---------------- staff-area gate (admin / faculty / student-side pages) ---------------- */
+// Both the seed-user check and the mobile-sidebar injector only run on
+// pages the faculty/student side actually renders. Public pages
+// (index.php, login pages, student-register.php) skip these.
+// student-profile.php and student-search.php live at the docroot, not
+// under /admin/, so they need an explicit path check.
+$req_uri = $_SERVER['REQUEST_URI'] ?? '';
+$is_staff_area = (strpos($req_uri, '/admin/') !== false)
+              || (strpos($req_uri, '/faculty-') !== false)
+              || (preg_match('#/admin($|\?)#', $req_uri) === 1)
+              || (strpos($req_uri, '/student-profile.php') !== false)
+              || (strpos($req_uri, '/student-search.php') !== false);
+
+if ($is_staff_area) {
+    // Mobile sidebar: 10 admin pages (faculty_manage, notices_list,
+    // notice_edit, achievements_list, achievement_edit, provisional_list,
+    // final_list, jersey_dashboard, jersey_manage, student_list) lack a
+    // toggle button / overlay / JS handler. The injector adds those
+    // pieces on the fly. Pages that already have a working pattern
+    // (dashboard.php, faculty-select.php, student-profile.php,
+    // student-search.php) get a no-op. Opt-out: append ?nomobile=1.
+    mobile_sidebar_inject();
+}
 
 /* ---------------- seed-user self-check (admin/faculty areas only) ---------------- */
 // Verify the published seed passwords still work, but only in admin/faculty
 // areas — public pages and student pages skip this to keep the DB idle.
-$req_uri = $_SERVER['REQUEST_URI'] ?? '';
-$is_staff_area = (strpos($req_uri, '/admin/') !== false)
-              || (strpos($req_uri, '/faculty-') !== false)
-              || (preg_match('#/admin($|\?)#', $req_uri) === 1);
 if ($is_staff_area) {
     if (isset($_GET['dismiss_seed_check'])) {
         // Acknowledge the warning for the rest of this session.

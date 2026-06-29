@@ -123,6 +123,7 @@ If a faculty reports "Invalid credentials", their hash drifted. Run `db_fix_seed
 | "Method not allowed." | Hit a POST-only endpoint with GET | Use the form button, not a bookmarked URL |
 | White page / 500 | PHP fatal — check deploy log | Don't add `db_*.php` debug scripts. Use the structured `db_verify.php` instead |
 | Uploaded photos missing | `uploads/students/.htaccess` was wiped during a `--delete` rsync | Re-create: `Require all denied` + PHP handler — see `uploads/students/.htaccess` in repo |
+| Mobile: sidebar won't open / "Dashboard" / nav links unreachable on phone | Old admin pages had the sidebar markup + off-screen CSS but no toggle button / overlay / JS | Fixed by `includes/mobile_sidebar.php` (auto-injects a hamburger button + overlay + drawer handler on any page whose HTML has `class="sidebar"`). Pages that already had a working pattern (`dashboard.php`, `faculty-select.php`, `student-profile.php`, `student-search.php`) get a no-op. Opt-out per URL: append `?nomobile=1` |
 
 ---
 
