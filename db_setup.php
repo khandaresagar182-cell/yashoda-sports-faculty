@@ -2,8 +2,8 @@
 /**
  * ONE-TIME database setup script.
  *
- * Loads sql/schema.sql, sql/seed.sql, sql/seed.ready.sql against the
- * configured DB. The script is intended to be hit ONCE after first
+ * Loads sql/schema.sql, sql/seed.ready.sql and every sql/migration-v*.sql
+ * against the configured DB. The script is intended to be hit ONCE after first
  * deployment of the App to a fresh managed database, then DELETED
  * from the repo. It is gated by a token (DB_SETUP_TOKEN env var) so
  * that an accidental public hit cannot wipe a live database.
@@ -167,10 +167,8 @@ if (!empty($check)) {
 
 $sqlDir = __DIR__ . '/sql';
 $files  = [
-    // Base schema + seed data
-    // NOTE: seed.sql and seed.ready.sql are duplicate content — pick one.
-    // seed.ready.sql is the canonical production seed; seed.sql is the older
-    // demo seed. Running both causes duplicate-key errors on uq_dept_code.
+    // Base schema + seed data. seed.ready.sql is the canonical production seed
+    // (the older sql/seed.sql demo seed was removed in the cleanup pass).
     'schema.sql',
     'seed.ready.sql',
     // All migrations in version order

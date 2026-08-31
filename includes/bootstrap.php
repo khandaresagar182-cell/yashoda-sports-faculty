@@ -91,7 +91,10 @@ if (session_status() === PHP_SESSION_NONE) {
         // For a college admin portal this is the right trade-off.
         'samesite' => 'Lax',
     ]);
-    ini_set('session.use_strict_mode', '0');
+    // Strict mode: reject a client-supplied session ID that PHP never issued,
+    // blocking session-fixation. Safe here — login always calls
+    // session_regenerate_id(true), so nothing relies on adopting a pre-auth ID.
+    ini_set('session.use_strict_mode', '1');
     ini_set('session.gc_maxlifetime', '1800');
     session_start();
 }

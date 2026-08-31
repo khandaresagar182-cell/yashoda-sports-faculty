@@ -125,7 +125,12 @@ if ($isLocal) {
         echo "Set DB_HOST, DB_USER, DB_NAME, DB_PORT, DB_PASS as Environment Variables on the App,\n";
         echo "OR fix the DigitalOcean managed database binding so DATABASE_URL resolves,\n";
         echo "OR create includes/config.local.php with the credentials (see includes/config.local.example.php).\n";
-        echo "Currently DATABASE_URL = " . var_export($envLookup('DATABASE_URL'), true) . "\n";
+        // Show DATABASE_URL for diagnostics but never print the password it carries
+        // (format: mysql://user:PASSWORD@host:port/db).
+        $dbUrl = $envLookup('DATABASE_URL');
+        echo "Currently DATABASE_URL = " . (is_string($dbUrl) && $dbUrl !== ''
+            ? preg_replace('#://([^:/@]+):[^@]*@#', '://$1:***@', $dbUrl)
+            : var_export($dbUrl, true)) . "\n";
         exit;
     }
 
