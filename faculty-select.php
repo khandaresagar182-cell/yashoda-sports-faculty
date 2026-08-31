@@ -271,7 +271,7 @@ if ($f['role'] === 'FACULTY' && count($departments) === 1) {
                         <h4><?= h($f['full_name']) ?></h4>
                         <span><?= h($f['role']) ?></span>
                     </div>
-                    <a href="admin/logout.php" class="btn-logout" title="Logout">
+                    <a href="admin/logout.php?_csrf=<?= h(csrf_token()) ?>" class="btn-logout" title="Logout">
                         <i class="bi bi-box-arrow-right"></i>
                     </a>
                 </div>

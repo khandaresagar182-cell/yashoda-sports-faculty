@@ -724,7 +724,7 @@ $wizard_steps = [
         <div class="user-pill">
             <div class="avatar"><?= h(initials($student['full_name'])) ?></div>
             <span><?= h($student['full_name']) ?></span>
-            <a class="logout" href="student-logout.php" title="Logout"><i class="bi bi-box-arrow-right"></i></a>
+            <a class="logout" href="student-logout.php?_csrf=<?= h(csrf_token()) ?>" title="Logout"><i class="bi bi-box-arrow-right"></i></a>
         </div>
     </div>
 
