@@ -29,6 +29,17 @@ csrf_check();
 
 $meId = (int)current_student()['id'];
 
+/* Locked profile: once submitted, every write below is refused until
+ * faculty grants edit access (students.edit_unlocked = 1) on
+ * student-profile.php. Re-submitting resets the flag back to 0. */
+$lockRow = db_one('SELECT form_submitted_at, edit_unlocked FROM students WHERE id = ?', [$meId], 'i');
+if ($lockRow && student_form_locked($lockRow)) {
+    flash_set('student_dashboard_err',
+        'Your profile is locked after submission. Ask your Faculty of Sports to enable editing before making changes.',
+        'error');
+    redirect('student-dashboard.php');
+}
+
 /* -----------------------------------------------------------------
  * Helpers (local — keep this file self-contained)
  * ----------------------------------------------------------------- */
@@ -53,6 +64,10 @@ if ($step < 1 || $step > 5) {
 }
 
 if ($step === 5) {
+    if (isset($_POST['bank_details'])) {
+        handle_bank_details_save($meId);
+        return;
+    }
     handle_doc_upload($meId);
     return;
 }
@@ -62,6 +77,11 @@ handle_step_save($meId, $step);
 
 /* unreachable */
 redirect('student-dashboard.php?step=' . $step);
+
+function is_valid_passing_year(string $y): bool
+{
+    return (bool)preg_match('/^(19|20)\d{2}$/', $y) && (int)$y <= (int)date('Y') + 1;
+}
 
 /* =================================================================
  * Mode 1 — Step field save (1..4)
@@ -83,7 +103,8 @@ function handle_step_save(int $meId, int $step): void
 
     $dept_code              = (string)($current['department_code'] ?? '');
     $uses_father_first_name = in_array($dept_code, ['engineering', 'pharmacy'], true);
-    $stores_roll_no         = in_array($dept_code, ['polytechnic', 'dpharm', 'pharmacy', 'ytc_pharmacy', 'management', 'architecture'], true);
+    $stores_roll_no         = in_array($dept_code, ['engineering', 'polytechnic', 'dpharm', 'pharmacy', 'ytc_pharmacy', 'management', 'architecture'], true);
+    $needs_course_duration  = $dept_code !== 'polytechnic';
 
     /* Game-picker detection — same lookup as student-dashboard.php. */
     $catalog_rows = db_select(
@@ -92,7 +113,6 @@ function handle_step_save(int $meId, int $step): void
         [(int)$current['department_id']], 'i'
     );
     $uses_game_picker = !empty($catalog_rows);
-    $game_max_picks   = $uses_game_picker ? (int)$catalog_rows[0]['max_picks'] : 0;
     $catalog_codes    = array_column($catalog_rows, 'game_code');
     $catalog_codes_set = array_flip(array_map('strval', $catalog_codes));
 
@@ -110,38 +130,63 @@ function handle_step_save(int $meId, int $step): void
 
         $mother_name  = trim((string)($_POST['mother_name']  ?? ''));
         $dob          = trim((string)($_POST['dob']          ?? ''));
+        $aadhar_number = preg_replace('/\D+/', '', (string)($_POST['aadhar_number'] ?? ''));
         $gender       = trim((string)($_POST['gender']       ?? ''));
         $blood_group  = trim((string)($_POST['blood_group']  ?? ''));
         $mobile       = trim((string)($_POST['mobile']       ?? ''));
-        $address      = trim((string)($_POST['address']      ?? ''));
+        $same_as_mobile = !empty($_POST['same_as_mobile']);
+        $whatsapp_no  = $same_as_mobile
+            ? $mobile
+            : trim((string)($_POST['whatsapp_no']  ?? ''));
+        $permanent_address = trim((string)($_POST['permanent_address'] ?? ''));
+        $same_as_permanent = !empty($_POST['same_as_permanent']);
+        $current_address   = $same_as_permanent
+            ? $permanent_address
+            : trim((string)($_POST['current_address'] ?? ''));
 
         if (strlen($full_name) < 2 || strlen($full_name) > 160) {
             $errors[] = 'Full name must be 2-160 characters.';
         }
         $dob_ts = strtotime($dob);
-        if (!$dob_ts || $dob_ts > time() || $dob_ts < strtotime('1990-01-01')) {
-            $errors[] = 'Please enter a valid date of birth.';
+        if (!$dob_ts || $dob_ts > time() || $dob_ts < strtotime('1995-01-01')) {
+            $errors[] = 'Please enter a valid date of birth (1995 onwards, not in the future).';
         }
         if (!preg_match('/^[0-9]{10}$/', $mobile)) {
             $errors[] = 'Mobile number must be exactly 10 digits.';
+        }
+        if ($whatsapp_no !== '' && !preg_match('/^[0-9]{10}$/', $whatsapp_no)) {
+            $errors[] = 'WhatsApp number must be exactly 10 digits.';
         }
         if ($gender === '' || !in_array($gender, gender_options(), true)) {
             $errors[] = 'Please select your gender.';
         }
         if ($blood_group !== '' && !in_array($blood_group, blood_options(), true)) {
-            $errors[] = 'Invalid blood group.';
+            $errors[] = 'Please select a valid blood group.';
         }
-        if ($address === '' || strlen($address) > 500) {
-            $errors[] = 'Address is required (max 500 characters).';
+        // Aadhar is printed on the Shivaji University eligibility proforma,
+        // which every department except polytechnic uses.
+        if ($dept_code !== 'polytechnic' && !preg_match('/^[0-9]{12}$/', $aadhar_number)) {
+            $errors[] = 'Aadhar number must be exactly 12 digits.';
+        } elseif ($aadhar_number !== '' && !preg_match('/^[0-9]{12}$/', $aadhar_number)) {
+            $errors[] = 'Aadhar number must be exactly 12 digits.';
+        }
+        if ($permanent_address === '' || strlen($permanent_address) > 500) {
+            $errors[] = 'Permanent Address is required (max 500 characters).';
+        }
+        if ($current_address === '' || strlen($current_address) > 500) {
+            $errors[] = 'Current Address is required (max 500 characters).';
         }
         /* parent-name semantics:
-           For engineering/pharmacy, the father's first name IS the middle name.
-           Copy middle_name into mother_name (the column we use to store the
-           parent name). Middle name is required for every department. */
+           For engineering/pharmacy, the father's first name IS the middle name
+           (needed to build the legal full name) and is stored in its own
+           `father_name` column. `mother_name` always holds the student's
+           actual mother's name, collected separately. Middle name is
+           required for every department. */
+        $father_name = null;
         if ($middle_name === '') {
             $errors[] = 'Middle name is required.';
         } elseif ($uses_father_first_name) {
-            $mother_name = $middle_name;
+            $father_name = $middle_name;
         }
 
         if ($errors) {
@@ -153,18 +198,23 @@ function handle_step_save(int $meId, int $step): void
         $dob_changed = (date('Y-m-d', $dob_ts) !== (string)$current['dob']);
 
         $sql = 'UPDATE students SET
-                    full_name = ?, mother_name = ?, dob = ?, gender = ?, blood_group = ?,
-                    mobile = ?, address = ?';
+                    full_name = ?, mother_name = ?, father_name = ?, dob = ?, aadhar_number = ?, gender = ?, blood_group = ?,
+                    mobile = ?, whatsapp_no = ?, address = ?, permanent_address = ?, current_address = ?';
         $params = [
             $full_name,
             $mother_name !== '' ? $mother_name : null,
+            $father_name,
             date('Y-m-d', $dob_ts),
+            $aadhar_number !== '' ? $aadhar_number : null,
             $gender !== '' ? $gender : null,
             $blood_group !== '' ? $blood_group : null,
             $mobile,
-            $address !== '' ? $address : null,
+            $whatsapp_no !== '' ? $whatsapp_no : null,
+            $permanent_address, // kept in sync so admin list/exports (still on the legacy `address` column) don't go stale
+            $permanent_address,
+            $current_address,
         ];
-        $types = 'sssssss';
+        $types = 'ssssssssssss';
 
         if ($dob_changed) {
             $new_pw_plain = dob_to_password(date('Y-m-d', $dob_ts));
@@ -193,15 +243,25 @@ function handle_step_save(int $meId, int $step): void
         $enrollment_no  = trim((string)($_POST['enrollment_no']  ?? ''));
         $roll_no        = trim((string)($_POST['roll_no']        ?? ''));
         $program        = trim((string)($_POST['program']        ?? ''));
-        $academic_year  = trim((string)($_POST['academic_year']  ?? ''));
+        $course_duration = trim((string)($_POST['course_duration_years'] ?? ''));
+        $department_name = trim((string)($_POST['department_name'] ?? ''));
         $study_year     = trim((string)($_POST['study_year']     ?? ''));
+        $ssc_year       = trim((string)($_POST['ssc_passing_year']     ?? ''));
+        $hsc_year       = trim((string)($_POST['hsc_passing_year']     ?? ''));
+        $diploma_year   = trim((string)($_POST['diploma_passing_year'] ?? ''));
+        $fa_univ_year   = trim((string)($_POST['first_admission_university_year'] ?? ''));
+        $fa_course_year = trim((string)($_POST['first_admission_course_year']     ?? ''));
+        $fa_class_year  = trim((string)($_POST['first_admission_class_year']      ?? ''));
+        $gap_year_raw   = $_POST['has_gap_year'] ?? '';
+        $has_gap_year   = in_array((string)$gap_year_raw, ['0', '1'], true) ? (int)$gap_year_raw : null;
+        $gap_year_detail = trim((string)($_POST['gap_year_detail'] ?? ''));
         $department_id  = (int)($_POST['department_id'] ?? 0);
 
         if ($department_id <= 0 || $department_id !== (int)$current['department_id']) {
             $errors[] = 'Invalid department.';
         }
         if ($enrollment_no === '' || strlen($enrollment_no) > 40) {
-            $errors[] = 'Enrollment number is required (max 40 characters).';
+            $errors[] = 'PRN/Enrollment number is required (max 40 characters).';
         } else {
             /* UNIQUE check — same as admin/student_save.php:93-99 */
             $dup = db_one(
@@ -209,17 +269,44 @@ function handle_step_save(int $meId, int $step): void
                 [$enrollment_no, $meId], 'si'
             );
             if ($dup) {
-                $errors[] = "Enrollment number '$enrollment_no' is already in use.";
+                $errors[] = "PRN/Enrollment number '$enrollment_no' is already in use.";
             }
         }
         if ($study_year === '' || !in_array($study_year, year_options(), true)) {
-            $errors[] = 'Year of Study is required.';
+            $errors[] = 'Current Year in which studying is required.';
         }
         if ($program === '' || strlen($program) > 120) {
-            $errors[] = 'Program / Branch is required (max 120 characters).';
+            $errors[] = 'Program is required (max 120 characters).';
         }
-        if ($academic_year === '' || !in_array($academic_year, academic_year_options(), true)) {
-            $errors[] = 'Academic Year is required.';
+        $valid_durations = ['2 Year', '3 Year', '4 Year', '5 Year', '6 Year'];
+        if ($needs_course_duration && !in_array($course_duration, $valid_durations, true)) {
+            $errors[] = 'Duration of Course is required.';
+        }
+        if ($department_name === '' || strlen($department_name) > 120) {
+            $errors[] = 'Department is required (max 120 characters).';
+        }
+        if ($ssc_year === '' || !is_valid_passing_year($ssc_year)) {
+            $errors[] = 'SSC Passing Year is required and must be a valid 4-digit year.';
+        }
+        if ($hsc_year !== '' && !is_valid_passing_year($hsc_year)) {
+            $errors[] = 'HSC Passing Year must be a valid 4-digit year.';
+        }
+        if ($diploma_year !== '' && !is_valid_passing_year($diploma_year)) {
+            $errors[] = 'Diploma Passing Year must be a valid 4-digit year.';
+        }
+        if ($fa_univ_year === '' || !is_valid_passing_year($fa_univ_year)) {
+            $errors[] = 'Date & Year of First Admission to University / College is required and must be a valid 4-digit year.';
+        }
+        if ($fa_course_year === '' || !is_valid_passing_year($fa_course_year)) {
+            $errors[] = 'Date & Year of First Admission to Present Course is required and must be a valid 4-digit year.';
+        }
+        if ($fa_class_year === '' || !is_valid_passing_year($fa_class_year)) {
+            $errors[] = 'Date & Year of First Admission to Present Class is required and must be a valid 4-digit year.';
+        }
+        if ($has_gap_year === null) {
+            $errors[] = 'Please choose whether you have a Gap / Year Drop.';
+        } elseif ($has_gap_year === 1 && $gap_year_detail === '') {
+            $errors[] = 'Please mention the year for your Gap / Year Drop.';
         }
 
         if ($errors) {
@@ -227,19 +314,33 @@ function handle_step_save(int $meId, int $step): void
             redirect('student-dashboard.php?step=2');
         }
 
+        $gap_year_detail_to_store = $has_gap_year === 1 ? $gap_year_detail : null;
+
         $sql = 'UPDATE students SET
-                    enrollment_no = ?, roll_no = ?, program = ?, academic_year = ?, study_year = ?,
+                    enrollment_no = ?, roll_no = ?, program = ?, course_duration_years = ?, department_name = ?, study_year = ?,
+                    ssc_passing_year = ?, hsc_passing_year = ?, diploma_passing_year = ?,
+                    first_admission_university_year = ?, first_admission_course_year = ?, first_admission_class_year = ?,
+                    has_gap_year = ?, gap_year_detail = ?,
                     form_step = GREATEST(COALESCE(form_step, 0), 3)
                 WHERE id = ?';
         $params = [
             $enrollment_no,
             ($stores_roll_no && $roll_no !== '') ? $roll_no : null,
             $program      !== '' ? $program      : null,
-            $academic_year!== '' ? $academic_year: null,
+            ($needs_course_duration && $course_duration !== '') ? $course_duration : null,
+            $department_name,
             $study_year   !== '' ? $study_year   : null,
+            $ssc_year,
+            $hsc_year     !== '' ? $hsc_year     : null,
+            $diploma_year !== '' ? $diploma_year : null,
+            $fa_univ_year,
+            $fa_course_year,
+            $fa_class_year,
+            $has_gap_year,
+            $gap_year_detail_to_store,
             $meId,
         ];
-        $types = 'sssssi';
+        $types = 'ssssssssssssisi';
 
         db_execute($sql, $params, $types);
 
@@ -249,8 +350,6 @@ function handle_step_save(int $meId, int $step): void
 
     if ($step === 3) {
         /* Sports */
-        $achievements = trim((string)($_POST['achievements'] ?? ''));
-
         if ($uses_game_picker) {
             /* Picker mode (polytechnic, dpharm, etc.) — validate games[] */
             $posted_games = $_POST['games'] ?? null;
@@ -261,8 +360,8 @@ function handle_step_save(int $meId, int $step): void
                     array_map(function ($v) { return trim((string)$v); }, $posted_games),
                     'strlen'
                 ));
-                if (count($posted_games) !== $game_max_picks) {
-                    $errors[] = "Please select exactly {$game_max_picks} games.";
+                if (count($posted_games) < 1) {
+                    $errors[] = 'Please select at least 1 game.';
                 }
                 if (count($posted_games) !== count(array_unique($posted_games))) {
                     $errors[] = 'Duplicate game selections are not allowed.';
@@ -280,8 +379,8 @@ function handle_step_save(int $meId, int $step): void
                 redirect('student-dashboard.php?step=3');
             }
 
-            /* Replace-write to student_selected_games + update achievements.
-               sport_1/sport_2 columns are left alone for picker depts (legacy data is preserved). */
+            /* Replace-write to student_selected_games.
+               sport_1/sport_2/achievements columns are left alone for picker depts (legacy data is preserved). */
             db_execute(
                 'DELETE FROM student_selected_games WHERE student_id = ?',
                 [$meId], 'i'
@@ -294,21 +393,17 @@ function handle_step_save(int $meId, int $step): void
 
             db_execute(
                 'UPDATE students SET
-                    achievements = ?,
                     form_step = GREATEST(COALESCE(form_step, 0), 4)
                  WHERE id = ?',
-                [
-                    $achievements !== '' ? $achievements : null,
-                    $meId,
-                ],
-                'si'
+                [$meId],
+                'i'
             );
 
             flash_set('student_dashboard_ok', 'Sports info saved.', 'success');
             redirect('student-dashboard.php?step=4');
         }
 
-        /* Legacy mode — free-text sport_1/sport_2/achievements. */
+        /* Legacy mode — free-text sport_1/sport_2. */
         $sport_1      = trim((string)($_POST['sport_1']      ?? ''));
         $sport_2      = trim((string)($_POST['sport_2']      ?? ''));
 
@@ -320,16 +415,15 @@ function handle_step_save(int $meId, int $step): void
         }
 
         $sql = 'UPDATE students SET
-                    sport_1 = ?, sport_2 = ?, achievements = ?,
+                    sport_1 = ?, sport_2 = ?,
                     form_step = GREATEST(COALESCE(form_step, 0), 4)
                 WHERE id = ?';
         $params = [
             $sport_1,
             $sport_2      !== '' ? $sport_2      : null,
-            $achievements !== '' ? $achievements : null,
             $meId,
         ];
-        $types = 'sssi';
+        $types = 'ssi';
 
         db_execute($sql, $params, $types);
 
@@ -345,25 +439,43 @@ function handle_step_save(int $meId, int $step): void
             redirect('student-dashboard.php?step=4');
         }
         $has_played = (int)$raw;
-        $sports_history = trim((string)($_POST['sports_history'] ?? ''));
 
-        // If the student says "No", always wipe any previous history.
-        // If "Yes", store the typed text (or NULL if they left it blank).
-        $history_to_store = $has_played === 1
-            ? ($sports_history !== '' ? $sports_history : null)
-            : null;
+        // Per tournament level: Yes/No + (if Yes) year of participation.
+        // If the student says "No" overall, wipe every level's answer.
+        $setSql = ['has_played_in_college = ?'];
+        $params = [$has_played];
+        $types  = 'i';
 
-        $sql = 'UPDATE students SET
-                    has_played_in_college = ?,
-                    sports_history = ?,
+        foreach (participation_levels() as $lvl) {
+            $lvlRaw = $_POST[$lvl['slug'] . '_played'] ?? '';
+            $lvlPlayed = in_array((string)$lvlRaw, ['0', '1'], true) ? (int)$lvlRaw : null;
+            if ($has_played === 1 && $lvlPlayed === null) {
+                flash_set('student_dashboard_err', 'Please choose Yes or No for ' . $lvl['label'] . ' participation.', 'error');
+                redirect('student-dashboard.php?step=4');
+            }
+            if ($has_played === 0) {
+                $lvlPlayed = null;
+            }
+
+            $lvlYearRaw = trim((string)($_POST[$lvl['slug'] . '_year'] ?? ''));
+            if ($has_played === 1 && $lvlPlayed === 1 && $lvlYearRaw === '') {
+                flash_set('student_dashboard_err', 'Please mention the year of participation for ' . $lvl['label'] . '.', 'error');
+                redirect('student-dashboard.php?step=4');
+            }
+            $lvlYear = ($lvlPlayed === 1 && $lvlYearRaw !== '') ? $lvlYearRaw : null;
+
+            $setSql[] = "{$lvl['played_col']} = ?";
+            $setSql[] = "{$lvl['year_col']} = ?";
+            $params[] = $lvlPlayed;
+            $params[] = $lvlYear;
+            $types   .= 'is';
+        }
+
+        $sql = 'UPDATE students SET ' . implode(', ', $setSql) . ',
                     form_step = GREATEST(COALESCE(form_step, 0), 5)
                 WHERE id = ?';
-        $params = [
-            $has_played,
-            $history_to_store,
-            $meId,
-        ];
-        $types = 'isi';
+        $params[] = $meId;
+        $types   .= 'i';
 
         db_execute($sql, $params, $types);
 
@@ -373,6 +485,53 @@ function handle_step_save(int $meId, int $step): void
         flash_set('student_dashboard_ok', $msg, 'success');
         redirect('student-dashboard.php?step=5');
     }
+}
+
+/* =================================================================
+ * Mode 2b — Bank account details save (step=5, POST bank_details=1)
+ * The five text fields that go with the "Bank passbook" upload.
+ * Returns JSON; called via fetch().
+ * ================================================================= */
+function handle_bank_details_save(int $meId): void
+{
+    header('Content-Type: application/json; charset=utf-8');
+
+    $acc    = trim((string)($_POST['bank_account_number'] ?? ''));
+    $acc2   = trim((string)($_POST['bank_account_number_confirm'] ?? ''));
+    $bank   = trim((string)($_POST['bank_name'] ?? ''));
+    $branch = trim((string)($_POST['bank_branch'] ?? ''));
+    $ifsc   = strtoupper(trim((string)($_POST['bank_ifsc'] ?? '')));
+
+    if ($acc === '' || $acc2 === '' || $bank === '' || $branch === '' || $ifsc === '') {
+        echo json_encode(['ok' => false, 'message' => 'All five bank fields are required.']);
+        return;
+    }
+    if (!preg_match('/^[0-9]{6,20}$/', $acc)) {
+        echo json_encode(['ok' => false, 'message' => 'Account number must be 6–20 digits.']);
+        return;
+    }
+    if ($acc !== $acc2) {
+        echo json_encode(['ok' => false, 'message' => 'Account numbers do not match.']);
+        return;
+    }
+    if (!preg_match('/^[A-Z]{4}0[A-Z0-9]{6}$/', $ifsc)) {
+        echo json_encode(['ok' => false, 'message' => 'IFSC code format is invalid (e.g. SBIN0001234).']);
+        return;
+    }
+    if (mb_strlen($bank) > 120 || mb_strlen($branch) > 120) {
+        echo json_encode(['ok' => false, 'message' => 'Bank / branch name is too long (max 120 characters).']);
+        return;
+    }
+
+    db_execute(
+        'UPDATE students
+            SET bank_account_number = ?, bank_name = ?, bank_branch = ?, bank_ifsc = ?
+          WHERE id = ?',
+        [$acc, $bank, $branch, $ifsc, $meId],
+        'ssssi'
+    );
+
+    echo json_encode(['ok' => true]);
 }
 
 /* =================================================================
@@ -509,12 +668,10 @@ function handle_finalize(int $meId): void
     db_execute(
         'UPDATE students
             SET form_submitted_at = NOW(),
-                form_step         = 6
+                form_step         = 6,
+                edit_unlocked     = 0
           WHERE id = ?',
         [$meId], 'i'
     );
-    flash_set('student_dashboard_ok',
-        'Profile submitted to your faculty. You can still edit any section and re-submit.',
-        'success');
-    redirect('student-dashboard.php?step=6');
+    redirect('student-dashboard.php');
 }

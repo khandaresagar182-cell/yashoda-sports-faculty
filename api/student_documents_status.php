@@ -37,4 +37,15 @@ $rows = db_select(
     [$meId, $meId], 'ii'
 );
 
+// The Gap certificate is only mandatory for students who answered "Yes"
+// to "Gap / Year Drop?" in Step 2 — everyone else sees it as optional.
+$student = db_one('SELECT has_gap_year FROM students WHERE id = ?', [$meId], 'i');
+$hasGapYear = (int)($student['has_gap_year'] ?? 0) === 1;
+foreach ($rows as &$row) {
+    if (stripos((string)$row['document_name'], 'gap certificate') === 0) {
+        $row['is_required'] = $hasGapYear ? 1 : 0;
+    }
+}
+unset($row);
+
 echo json_encode($rows);

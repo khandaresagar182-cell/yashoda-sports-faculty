@@ -320,12 +320,25 @@ $flash_kind = $flash['level'] ?? 'error';
             to   { opacity: 1; transform: translateY(0); }
         }
 
+        @media (max-width: 576px) {
+            .login-card { max-width: 95%; border-radius: 12px; }
+            .login-card-body { padding: 1.25rem 1.25rem 1rem; }
+            .login-card-footer { padding: 1rem 1.25rem; }
+            .login-footer { padding: 0.75rem 0; }
+            .login-footer p { font-size: 0.75rem; }
+            .input-wrapper input { padding: 0.7rem 0.7rem 0.7rem 2.5rem; font-size: 0.9rem; }
+            .btn-login { padding: 0.75rem; font-size: 0.9rem; }
+        }
         @media (max-width: 480px) {
-            .login-card-header { padding: 1.5rem 1.5rem 1.3rem; }
-            .login-card-body   { padding: 1.5rem 1.5rem 1.2rem; }
-            .login-card-footer { padding: 1rem 1.5rem; }
-            .login-card-header h1 { font-size: 1.2rem; }
+            .login-card-header { padding: 1.25rem 1.25rem 1.1rem; }
+            .login-card-body   { padding: 1rem 1.15rem 0.85rem; }
+            .login-card-footer { padding: 0.85rem 1.15rem; }
+            .login-card-header h1 { font-size: 1rem; }
+            .login-card-header p { font-size: 0.7rem; }
+            .login-icon { width: 42px; height: 42px; }
             .form-options { flex-direction: column; align-items: flex-start; }
+            .form-group label { font-size: 0.75rem; }
+            .back-link { font-size: 0.8rem; }
         }
     </style>
 </head>

@@ -58,6 +58,12 @@ if ($form) {
     if (!empty($form['academic_year'])) {
         $team_label .= ' (' . $form['academic_year'] . ')';
     }
+    if (!empty($form['gender'])) {
+        $genderLabel = gender_list_options()[$form['gender']] ?? '';
+        if ($genderLabel !== '') {
+            $team_label .= ' · ' . $genderLabel;
+        }
+    }
 }
 
 /* ------------------------------------------------------------------ */
@@ -113,15 +119,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $form && (int)$form['is_open']) {
         }
     }
 
-    // Check student is on the final team
+    // Check student is on the final team for THIS jersey batch's gender.
+    // Without the gender check, a student on the other gender's final
+    // team for the same game/event/year would also pass here — they'd
+    // just have used the wrong link.
     if (empty($errors) && $student) {
-        $on_team = db_one(
-            "SELECT id FROM final_teams
-              WHERE game_name = ? AND event_label = ? AND academic_year <=> ?
-                AND student_id = ?",
-            [$form['game_name'], $form['event_label'], $form['academic_year'], (int)$student['id']],
-            'sssi'
-        );
+        $on_team_sql = "SELECT id FROM final_teams
+                          WHERE game_name = ? AND event_label = ? AND academic_year <=> ?
+                            AND student_id = ?";
+        $on_team_params = [$form['game_name'], $form['event_label'], $form['academic_year'], (int)$student['id']];
+        $on_team_types = 'sssi';
+        if (!empty($form['gender'])) {
+            $on_team_sql .= " AND gender <=> ?";
+            $on_team_params[] = $form['gender'];
+            $on_team_types .= 's';
+        }
+        $on_team = db_one($on_team_sql, $on_team_params, $on_team_types);
         if (!$on_team) {
             $errors[] = 'You are not on the final team for this event. Please contact your sports faculty.';
         }
@@ -464,7 +477,19 @@ $college = db_one('SELECT * FROM college_settings WHERE id = 1') ?? [
 
         @media (max-width: 500px) {
             .form-row { grid-template-columns: 1fr; }
-            body { padding: 1rem .75rem; }
+            body { padding: 1rem .5rem; }
+            .jersey-card { border-radius: 12px; }
+            .card-banner { padding: 1.25rem 1rem 1rem; }
+            .card-banner h1 { font-size: 1rem; }
+            .card-banner .jersey-icon { font-size: 1.5rem; }
+            .card-body { padding: 1.15rem 1rem 1rem; }
+            .form-group label { font-size: 0.7rem; }
+            .form-group input, .form-group select { padding: 0.6rem 0.75rem; font-size: 0.85rem; }
+            .btn-submit { font-size: 0.88rem; padding: 0.65rem; }
+            .brand-header { gap: 0.5rem; margin-bottom: 1rem; }
+            .brand-header img { width: 38px; height: 38px; }
+            .brand-header .brand-name { font-size: 0.75rem; }
+            .brand-header .dept-label { font-size: 0.65rem; }
         }
     </style>
 </head>

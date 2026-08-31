@@ -129,7 +129,7 @@ function game_icon_for(string $code): string {
 /* Game-picker state for this student. Used by both view + edit modes. */
 $game_catalog = [];
 $selected_games = [];
-$game_max_picks = 0;
+$game_total_available = 0;
 $uses_game_picker = false;
 if (!$is_new && $student) {
     $game_catalog = db_select(
@@ -141,7 +141,7 @@ if (!$is_new && $student) {
     );
     $uses_game_picker = !empty($game_catalog);
     if ($uses_game_picker) {
-        $game_max_picks = (int)$game_catalog[0]['max_picks'];
+        $game_total_available = count($game_catalog);
         $rows = db_select(
             'SELECT game_code FROM student_selected_games WHERE student_id = ?',
             [$id], 'i'
@@ -170,7 +170,18 @@ if (!$is_new && $student) {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="<?= h(url('css/public.css')) ?>">
     <link rel="stylesheet" href="<?= h(url('css/admin.css')) ?>">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <style>
+        /* Date of Birth picker (flatpickr) — brand colors, quick year jump */
+        .flatpickr-calendar { border-radius: 10px; box-shadow: 0 12px 30px rgba(0,0,0,.18); }
+        .flatpickr-months .flatpickr-month, .flatpickr-current-month .flatpickr-monthDropdown-months,
+        .flatpickr-current-month input.cur-year { color: var(--primary-navy); fill: var(--primary-navy); }
+        .flatpickr-current-month input.cur-year { font-weight: 600; }
+        span.flatpickr-weekday { color: var(--primary-navy); font-weight: 600; }
+        .flatpickr-day.selected, .flatpickr-day.selected:hover { background: var(--primary-navy); border-color: var(--primary-navy); }
+        .flatpickr-day.today { border-color: var(--accent-gold); }
+        .flatpickr-day.today:hover { background: var(--accent-gold); border-color: var(--accent-gold); }
+        .flatpickr-day:hover { background: var(--off-white); }
         .yesno-group { display:flex; gap:.6rem; flex-wrap:wrap; }
 
         /* Official-style file upload rules panel (Required Documents section) */
@@ -228,6 +239,12 @@ if (!$is_new && $student) {
         .yesno-opt.selected .yesno-circle { border-color: var(--primary-navy); }
         .yesno-opt.selected .yesno-circle::after { content:''; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:8px; height:8px; border-radius:50%; background: var(--primary-navy); }
         .form-group .hint { font-size:.72rem; color: var(--medium-gray); margin-top:.3rem; }
+        .yesno-group--sm .yesno-opt { padding:.32rem .75rem; font-size:.85rem; }
+        .yesno-group--sm .yesno-circle { width:14px; height:14px; }
+        .yesno-group--sm .yesno-opt.selected .yesno-circle::after { width:6px; height:6px; }
+        .participation-level { padding:.9rem 1rem; border:1px solid var(--light-gray); border-radius:10px; margin-bottom:.9rem; }
+        .participation-level .form-group:last-child { margin-bottom:0; }
+        .participation-level-label { font-weight:600; font-size:.92rem; color: var(--text-dark); margin-bottom:.5rem; display:block; }
 
         /* Game-checkbox picker (Step 3) — same look as student-dashboard */
         .game-picker-head { display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-bottom:.7rem; flex-wrap:wrap; }
@@ -267,6 +284,20 @@ if (!$is_new && $student) {
         .game-chip { display:inline-flex; align-items:center; gap:.35rem; padding:.2rem .55rem; background: rgba(26,54,93,.08); color:#0a1f3d; border:1px solid rgba(26,54,93,.18); border-radius:3px; font-size:.78rem; font-weight:600; margin:.1rem .2rem .1rem 0; }
         .game-chip i { color: var(--primary-navy); }
         .game-chip.empty { background: transparent; color: var(--medium-gray); border:1px dashed var(--light-gray); font-weight:500; font-style:italic; }
+
+        @media (max-width: 768px) {
+            .game-picker-head { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+            .game-row { padding: 0.5rem; font-size: 0.82rem; }
+            .yesno-group { gap: 0.5rem; }
+            .yesno-opt { padding: 0.4rem 0.8rem; font-size: 0.85rem; }
+        }
+        @media (max-width: 576px) {
+            .upload-rules-head { font-size: 0.7rem; padding: 0.35rem 0.65rem; }
+            .upload-rules-foot { font-size: 0.68rem; padding: 0.35rem 0.65rem; }
+            .upload-rule { padding: 0.5rem 0.65rem; }
+            .btn-act { width: 100%; justify-content: center; }
+            .profile-actions { flex-direction: column; gap: 0.5rem; }
+        }
     </style>
 </head>
 <body>
@@ -283,10 +314,10 @@ if (!$is_new && $student) {
             </div>
             <nav class="sidebar-nav">
                 <div class="sidebar-nav-label">Main</div>
-                <a href="admin/dashboard.php"><i class="bi bi-speedometer2"></i> <span>Dashboard</span></a>
                 <?php if (has_multiple_departments()): ?>
                     <a href="faculty-select.php?change=1"><i class="bi bi-building"></i> <span>Select Faculty</span></a>
                 <?php endif; ?>
+                <a href="admin/dashboard.php"><i class="bi bi-speedometer2"></i> <span>Dashboard</span></a>
                 <a href="student-search.php"><i class="bi bi-search"></i> <span>Search Students</span></a>
                 <a href="student-profile.php?new=1" class="active"><i class="bi bi-person-plus"></i> <span><?= $is_new ? 'Add Student' : 'Student Profile' ?></span></a>
                 <a href="admin/provisional_list.php"><i class="bi bi-clipboard-check"></i> <span>Provisional Players</span></a>
@@ -361,6 +392,15 @@ if (!$is_new && $student) {
                                         <span class="meta-chip" style="background: rgba(25,135,84,.12); color:#0a3622; border-color: rgba(25,135,84,.3)">
                                             <i class="bi bi-check-circle-fill"></i> Student submitted on <?= h(date('d M Y', strtotime((string)$student['form_submitted_at']))) ?>
                                         </span>
+                                        <?php if ((int)($student['edit_unlocked'] ?? 0) === 1): ?>
+                                            <span class="meta-chip" style="background: rgba(25,135,84,.12); color:#146c43; border-color: rgba(25,135,84,.3)">
+                                                <i class="bi bi-unlock-fill"></i> Edit access granted — awaiting re-submission
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="meta-chip" style="background: var(--off-white); color: var(--medium-gray); border-color: var(--light-gray)">
+                                                <i class="bi bi-lock-fill"></i> Student form locked
+                                            </span>
+                                        <?php endif; ?>
                                     <?php else: ?>
                                         <span class="meta-chip" style="background: rgba(255,193,7,.12); color:#664d03; border-color: rgba(255,193,7,.3)">
                                             <i class="bi bi-pencil"></i> Profile draft (not submitted)
@@ -375,7 +415,23 @@ if (!$is_new && $student) {
                                 <a class="btn-act export" href="admin/export_xlsx.php?id=<?= (int)$student['id'] ?>">
                                     <i class="bi bi-download"></i> Export
                                 </a>
-
+                                <?php if (!empty($student['form_submitted_at'])): ?>
+                                    <form method="post" action="admin/student_toggle_edit.php" style="display:inline">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="id" value="<?= (int)$student['id'] ?>">
+                                        <?php if ((int)($student['edit_unlocked'] ?? 0) === 1): ?>
+                                            <input type="hidden" name="action" value="lock">
+                                            <button type="submit" class="btn-act lock" title="Revoke the student's edit access and re-lock their form">
+                                                <i class="bi bi-lock-fill"></i> Revoke Edit Access
+                                            </button>
+                                        <?php else: ?>
+                                            <input type="hidden" name="action" value="unlock">
+                                            <button type="submit" class="btn-act unlock" title="Let the student edit their submitted profile and re-submit">
+                                                <i class="bi bi-unlock-fill"></i> Allow Student to Edit
+                                            </button>
+                                        <?php endif; ?>
+                                    </form>
+                                <?php endif; ?>
                             </div>
                         </div>
 
@@ -388,8 +444,8 @@ if (!$is_new && $student) {
                                     <td class="rec-label">Full Name</td>
                                     <td class="rec-value"><?= h($student['full_name']) ?></td>
                                     <?php if (in_array($student['department_code'] ?? '', ['engineering', 'pharmacy'], true)): ?>
-                                        <td class="rec-label">Father First Name</td>
-                                        <td class="rec-value"><?= h($student['mother_name'] ?: '—') ?></td>
+                                        <td class="rec-label">Father's First Name</td>
+                                        <td class="rec-value"><?= h($student['father_name'] ?: '—') ?></td>
                                     <?php elseif (in_array($student['department_code'] ?? '', ['management', 'architecture'], true)): ?>
                                         <td class="rec-label">Mother Name</td>
                                         <td class="rec-value"><?= h($student['mother_name'] ?: '-') ?></td>
@@ -398,18 +454,19 @@ if (!$is_new && $student) {
                                         <td class="rec-value"><?= h($student['enrollment_no']) ?></td>
                                     <?php endif; ?>
                                 </tr>
-                                <?php if (($student['department_code'] ?? '') === 'engineering'): ?>
+                                <?php if (in_array($student['department_code'] ?? '', ['engineering', 'pharmacy'], true)): ?>
                                     <tr>
-                                        <td class="rec-label">Enrollment No.</td>
-                                        <td class="rec-value"><?= h($student['enrollment_no']) ?></td>
+                                        <td class="rec-label">Mother's Name</td>
+                                        <td class="rec-value"><?= h($student['mother_name'] ?: '—') ?></td>
                                         <td class="rec-label"></td>
                                         <td class="rec-value"></td>
                                     </tr>
-                                <?php elseif (in_array($student['department_code'] ?? '', ['polytechnic', 'dpharm', 'pharmacy', 'ytc_pharmacy', 'management', 'architecture'], true)): ?>
+                                <?php endif; ?>
+                                <?php if (in_array($student['department_code'] ?? '', ['polytechnic', 'dpharm', 'engineering', 'pharmacy', 'ytc_pharmacy', 'management', 'architecture'], true)): ?>
                                     <tr>
                                         <td class="rec-label">Roll No.</td>
                                         <td class="rec-value"><?= h($student['roll_no'] ?: '-') ?></td>
-                                        <?php if (in_array($student['department_code'] ?? '', ['pharmacy', 'ytc_pharmacy', 'management', 'architecture'], true)): ?>
+                                        <?php if (in_array($student['department_code'] ?? '', ['engineering', 'pharmacy', 'ytc_pharmacy', 'management', 'architecture'], true)): ?>
                                             <td class="rec-label">Enrollment No.</td>
                                             <td class="rec-value"><?= h($student['enrollment_no']) ?></td>
                                         <?php else: ?>
@@ -425,10 +482,16 @@ if (!$is_new && $student) {
                                     <td class="rec-value"><?= h($student['gender'] ?: '—') ?></td>
                                 </tr>
                                 <tr>
+                                    <td class="rec-label">Aadhar Number</td>
+                                    <td class="rec-value"><?= h($student['aadhar_number'] ?: '—') ?></td>
                                     <td class="rec-label">Blood Group</td>
                                     <td class="rec-value"><?= h($student['blood_group'] ?: '—') ?></td>
+                                </tr>
+                                <tr>
                                     <td class="rec-label">Status</td>
                                     <td class="rec-value" style="color:#38a169;font-weight:700">● Active</td>
+                                    <td class="rec-label"></td>
+                                    <td class="rec-value"></td>
                                 </tr>
 
                                 <tr class="record-section-row"><td colspan="4"><i class="bi bi-telephone"></i> Contact Details</td></tr>
@@ -493,19 +556,33 @@ if (!$is_new && $student) {
                                     if ($hpic_prev === null) {
                                         $hpic_prev = !empty($student['sports_history']) ? 1 : 0;
                                     }
+                                    $playedItems = [[
+                                        'label' => 'Played in this college?',
+                                        'html'  => (int)$hpic_prev === 1
+                                            ? '<span class="badge-ok"><i class="bi bi-check-circle"></i> Yes</span>'
+                                            : '<em class="empty">No</em>',
+                                    ]];
+                                    if ((int)$hpic_prev === 1) {
+                                        foreach (participation_levels() as $lvl) {
+                                            $lvlVal  = $student[$lvl['played_col']] ?? null;
+                                            $yearVal = $student[$lvl['year_col']] ?? null;
+                                            $playedItems[] = [
+                                                'label' => $lvl['label'],
+                                                'html'  => (int)$lvlVal === 1
+                                                    ? '<span class="badge-ok"><i class="bi bi-check-circle"></i> Yes' . (!empty($yearVal) ? ' — ' . h((string)$yearVal) : '') . '</span>'
+                                                    : '<em class="empty">No</em>',
+                                            ];
+                                        }
+                                    }
                                 ?>
+                                <?php foreach (array_chunk($playedItems, 2) as $pair): ?>
                                 <tr>
-                                    <td class="rec-label">Played in this college?</td>
-                                    <td class="rec-value">
-                                        <?php if ((int)$hpic_prev === 1): ?>
-                                            <span class="badge-ok"><i class="bi bi-check-circle"></i> Yes</span>
-                                        <?php else: ?>
-                                            <em class="empty">No</em>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td class="rec-label">Sports History</td>
-                                    <td class="rec-value"><?= !empty($student['sports_history']) ? nl2br(h($student['sports_history'])) : '<em class="empty">—</em>' ?></td>
+                                    <td class="rec-label"><?= h($pair[0]['label']) ?></td>
+                                    <td class="rec-value"><?= $pair[0]['html'] ?></td>
+                                    <td class="rec-label"><?= isset($pair[1]) ? h($pair[1]['label']) : '' ?></td>
+                                    <td class="rec-value"><?= isset($pair[1]) ? $pair[1]['html'] : '' ?></td>
                                 </tr>
+                                <?php endforeach; ?>
 
                                 <tr class="record-section-row"><td colspan="4"><i class="bi bi-file-earmark-pdf"></i> Uploaded Documents</td></tr>
                                 <?php if (!empty($documents)): ?>
@@ -619,9 +696,13 @@ if (!$is_new && $student) {
                                     <label for="full_name">Full Name *</label>
                                     <input type="text" id="full_name" name="full_name" placeholder="Enter full name" required value="<?= h($student['full_name'] ?? '') ?>">
                                 </div>
-                                <div class="form-group" id="parentNameField" style="display:none">
-                                    <label for="mother_name" id="parentNameLabel">Father First Name *</label>
-                                    <input type="text" id="mother_name" name="mother_name" placeholder="Enter father's first name" value="<?= h($student['mother_name'] ?? '') ?>">
+                                <div class="form-group" id="fatherNameField" style="display:none">
+                                    <label for="father_name">Father's First Name *</label>
+                                    <input type="text" id="father_name" name="father_name" placeholder="Enter father's first name" value="<?= h($student['father_name'] ?? '') ?>">
+                                </div>
+                                <div class="form-group" id="motherNameField" style="display:none">
+                                    <label for="mother_name">Mother's Name</label>
+                                    <input type="text" id="mother_name" name="mother_name" placeholder="Enter mother's name" value="<?= h($student['mother_name'] ?? '') ?>">
                                 </div>
                                 <div class="form-group">
                                     <label for="enrollment_no">Enrollment No. *</label>
@@ -633,9 +714,16 @@ if (!$is_new && $student) {
                                 </div>
                                 <div class="form-group">
                                     <label for="dob">Date of Birth *</label>
-                                    <input type="date" id="dob" name="dob" required
-                                           min="1900-01-01" max="<?= date('Y-m-d') ?>"
+                                    <input type="text" id="dob" name="dob" required autocomplete="off"
+                                           placeholder="dd-mm-yyyy"
                                            value="<?= h($student['dob'] ?? '') ?>">
+                                </div>
+                                <div class="form-group">
+                                    <label for="aadhar_number">Aadhar Number *</label>
+                                    <input type="text" id="aadhar_number" name="aadhar_number"
+                                           pattern="[0-9]{12}" maxlength="12" inputmode="numeric" autocomplete="off"
+                                           placeholder="12-digit Aadhar number" value="<?= h($student['aadhar_number'] ?? '') ?>">
+                                    <small style="color:var(--medium-gray)">12 digits. Required for all faculties except Polytechnic (Shivaji eligibility proforma).</small>
                                 </div>
                                 <div class="form-group">
                                     <label for="gender">Gender</label>
@@ -766,12 +854,12 @@ if (!$is_new && $student) {
                                     <div class="game-picker-counter" id="gameCounter">
                                         <strong id="gameCountNum"><?= count($selected_games) ?></strong>
                                         /
-                                        <strong id="gameMaxPicks"><?= (int)$game_max_picks ?></strong>
+                                        <strong id="gameTotalAvailable"><?= (int)$game_total_available ?></strong>
                                         selected
                                     </div>
-                                    <div class="hint" style="margin:0">Pick the games this student wants to enroll in.</div>
+                                    <div class="hint" style="margin:0">Pick the games this student wants to enroll in (any number).</div>
                                 </div>
-                                <div class="game-picker-bar"><div id="gameBarFill" style="width: <?= (int)round(count($selected_games) / max(1, $game_max_picks) * 100) ?>%"></div></div>
+                                <div class="game-picker-bar"><div id="gameBarFill" style="width: <?= (int)round(count($selected_games) / max(1, $game_total_available) * 100) ?>%"></div></div>
                                 <div class="game-list" id="gameGrid" role="list">
                                     <?php foreach ($game_catalog as $g):
                                         $code = (string)$g['game_code'];
@@ -824,11 +912,35 @@ if (!$is_new && $student) {
                                             <span class="yesno-text">No</span>
                                         </label>
                                     </div>
-                                    <div class="hint">If yes, fill in the sports history below. If no, leave the field empty.</div>
+                                    <div class="hint">If yes, fill in the levels of participation below. If no, leave them blank.</div>
                                 </div>
                                 <div class="form-group" style="grid-column:1/-1">
-                                    <label for="sports_history">Sports History / Games Played</label>
-                                    <textarea id="sports_history" name="sports_history" placeholder="e.g. 2023 — Inter-college Cricket (Runner-up). 2024 — University Football selection."><?= h($student['sports_history'] ?? '') ?></textarea>
+                                    <label>Levels of Participation</label>
+                                    <?php foreach (participation_levels() as $lvl):
+                                        $lvlValFac = $student[$lvl['played_col']] ?? null;
+                                    ?>
+                                    <div class="participation-level">
+                                        <span class="participation-level-label"><?= h($lvl['label']) ?></span>
+                                        <div class="yesno-group yesno-group--sm" role="radiogroup" aria-label="<?= h($lvl['label']) ?> participation">
+                                            <label class="yesno-opt <?= (int)$lvlValFac === 1 ? 'selected' : '' ?>" data-val="1">
+                                                <input type="radio" name="<?= h($lvl['slug']) ?>_played" value="1" <?= (int)$lvlValFac === 1 ? 'checked' : '' ?>>
+                                                <span class="yesno-circle"></span>
+                                                <span class="yesno-text">Yes</span>
+                                            </label>
+                                            <label class="yesno-opt <?= (int)$lvlValFac === 0 ? 'selected' : '' ?>" data-val="0">
+                                                <input type="radio" name="<?= h($lvl['slug']) ?>_played" value="0" <?= (int)$lvlValFac === 0 ? 'checked' : '' ?>>
+                                                <span class="yesno-circle"></span>
+                                                <span class="yesno-text">No</span>
+                                            </label>
+                                        </div>
+                                        <div class="form-group" style="margin:.6rem 0 0">
+                                            <label for="<?= h($lvl['slug']) ?>_year">Year of participation</label>
+                                            <input type="text" id="<?= h($lvl['slug']) ?>_year" name="<?= h($lvl['slug']) ?>_year" maxlength="100"
+                                                   placeholder="e.g. 2024"
+                                                   value="<?= h((string)($student[$lvl['year_col']] ?? '')) ?>">
+                                        </div>
+                                    </div>
+                                    <?php endforeach; ?>
                                 </div>
                             </div>
 
@@ -868,6 +980,17 @@ if (!$is_new && $student) {
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
         integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script>
+        flatpickr('#dob', {
+            dateFormat: 'Y-m-d',
+            altInput: true,
+            altFormat: 'd-m-Y',
+            minDate: '1995-01-01',
+            maxDate: 'today',
+            disableMobile: true
+        });
+    </script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             var sidebar = document.getElementById('sidebar');
@@ -887,9 +1010,10 @@ if (!$is_new && $student) {
             // Dynamic Document Requirements
             var deptSelect = document.getElementById('department_id');
             var docsGrid = document.getElementById('docs-fields-grid');
-            var parentNameField = document.getElementById('parentNameField');
-            var parentNameLabel = document.getElementById('parentNameLabel');
-            var parentNameInput = document.getElementById('mother_name');
+            var fatherNameField = document.getElementById('fatherNameField');
+            var fatherNameInput = document.getElementById('father_name');
+            var motherNameField = document.getElementById('motherNameField');
+            var motherNameInput = document.getElementById('mother_name');
             var rollField = document.getElementById('rollNumberField');
             var rollInput = document.getElementById('roll_no');
             var studyYearSelect = document.getElementById('study_year');
@@ -900,19 +1024,20 @@ if (!$is_new && $student) {
                 var usesFatherFirstName = option && ['engineering', 'pharmacy'].includes(option.dataset.code);
                 var isPolytechnic = option && (option.dataset.code === 'polytechnic' || option.dataset.code === 'dpharm');
                 var isPharmFacultyDepartment = option && ['pharmacy', 'ytc_pharmacy', 'management', 'architecture'].includes(option.dataset.code);
+                var isEngineering = option && option.dataset.code === 'engineering';
                 var isDiploma = option && option.dataset.code === 'polytechnic';
-                if (parentNameField && parentNameInput && parentNameLabel) {
-                    var showParentName = usesFatherFirstName || isPharmFacultyDepartment;
-                    parentNameField.style.display = showParentName ? '' : 'none';
-                    parentNameInput.required = usesFatherFirstName;
-                    parentNameLabel.textContent = usesFatherFirstName ? 'Father First Name *' : 'Mother Name';
-                    parentNameInput.placeholder = usesFatherFirstName
-                        ? "Enter father's first name"
-                        : "Enter mother's name";
-                    if (!showParentName) parentNameInput.value = '';
+                if (fatherNameField && fatherNameInput) {
+                    fatherNameField.style.display = usesFatherFirstName ? '' : 'none';
+                    fatherNameInput.required = usesFatherFirstName;
+                    if (!usesFatherFirstName) fatherNameInput.value = '';
+                }
+                if (motherNameField && motherNameInput) {
+                    var showMotherName = usesFatherFirstName || isPharmFacultyDepartment;
+                    motherNameField.style.display = showMotherName ? '' : 'none';
+                    if (!showMotherName) motherNameInput.value = '';
                 }
                 if (rollField && rollInput) {
-                    var showRollNumber = isPolytechnic || isPharmFacultyDepartment;
+                    var showRollNumber = isPolytechnic || isPharmFacultyDepartment || isEngineering;
                     rollField.style.display = showRollNumber ? '' : 'none';
                     rollInput.required = false;
                     if (!showRollNumber) rollInput.value = '';
@@ -1049,14 +1174,14 @@ if (!$is_new && $student) {
             });
         });
 
-        // Game-picker (faculty edit) — max-4 enforcement.
+        // Game-picker (faculty edit) — no cap, at least 1 required.
         (function () {
             var grid = document.getElementById('gameGrid');
             if (!grid) return;
             var cards = grid.querySelectorAll('.game-row');
-            var maxPicks = parseInt(
-                ((document.getElementById('gameMaxPicks') || {}).textContent || '4'), 10
-            ) || 4;
+            var totalGames = parseInt(
+                ((document.getElementById('gameTotalAvailable') || {}).textContent || '0'), 10
+            ) || 0;
             var counterNum = document.getElementById('gameCountNum');
             var counter    = document.getElementById('gameCounter');
             var bar        = document.getElementById('gameBarFill');
@@ -1066,32 +1191,13 @@ if (!$is_new && $student) {
             function refresh() {
                 var checked = grid.querySelectorAll('.game-row.selected').length;
                 if (counterNum) counterNum.textContent = String(checked);
-                if (counter) counter.classList.toggle('complete', checked === maxPicks);
-                if (bar) bar.style.width = Math.min(100, Math.round(checked / maxPicks * 100)) + '%';
-                var limitReached = checked >= maxPicks;
-                cards.forEach(function (c) {
-                    var cb = c.querySelector('input[type=checkbox]');
-                    if (!cb) return;
-                    var shouldDisable = limitReached && !cb.checked;
-                    cb.disabled = shouldDisable;
-                    c.classList.toggle('disabled', shouldDisable);
-                });
+                if (counter) counter.classList.toggle('complete', checked === totalGames && totalGames > 0);
+                if (bar) bar.style.width = Math.min(100, Math.round(checked / Math.max(1, totalGames) * 100)) + '%';
             }
             cards.forEach(function (card) {
                 var cb = card.querySelector('input[type=checkbox]');
                 if (!cb) return;
                 cb.addEventListener('change', function () {
-                    if (cb.checked) {
-                        var checkedNow = grid.querySelectorAll('.game-row.selected').length;
-                        if (checkedNow > maxPicks) {
-                            cb.checked = false;
-                            if (err) {
-                                err.textContent = 'You can only pick ' + maxPicks + ' games. Uncheck one first.';
-                                setTimeout(function () { err.textContent = ''; }, 2200);
-                            }
-                            return;
-                        }
-                    }
                     card.classList.toggle('selected', cb.checked);
                     refresh();
                 });
@@ -1099,9 +1205,9 @@ if (!$is_new && $student) {
             if (form) {
                 form.addEventListener('submit', function (e) {
                     var checked = grid.querySelectorAll('.game-row.selected').length;
-                    if (checked !== maxPicks) {
+                    if (checked < 1) {
                         e.preventDefault();
-                        if (err) err.textContent = 'Please select exactly ' + maxPicks + ' games.';
+                        if (err) err.textContent = 'Please select at least 1 game.';
                         grid.style.boxShadow = '0 0 0 3px rgba(185,28,28,.3)';
                         setTimeout(function () { grid.style.boxShadow = ''; }, 1500);
                     }

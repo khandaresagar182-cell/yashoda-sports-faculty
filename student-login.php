@@ -86,6 +86,22 @@ if ($just_registered !== null) unset($_SESSION['_student_just_registered']);
         .login-alert.alert-info { background: rgba(13,202,240,.1); color:#055160; border:1px solid rgba(13,202,240,.2); }
         @keyframes alertIn { from { opacity:0; transform: translateY(-5px); } to { opacity:1; transform: translateY(0); } }
         .pwd-hint { font-size:.72rem; color: var(--medium-gray); margin-top:.3rem; line-height:1.4; }
+        @media (max-width: 576px) {
+            .login-card { max-width: 95%; border-radius: 12px; }
+            .login-card-body { padding: 1.1rem 1.15rem .9rem; }
+            .login-card-footer { padding: .9rem 1.15rem; font-size: .82rem; }
+            .login-footer p { font-size: .75rem; }
+            .input-wrapper input { padding: .7rem .7rem .7rem 2.5rem; font-size: .9rem; }
+            .btn-login { padding: .75rem; font-size: .9rem; }
+        }
+        @media (max-width: 480px) {
+            .login-card-header { padding: 1.1rem 1.15rem 1rem; }
+            .login-card-header h1 { font-size: 1rem; }
+            .login-card-header p { font-size: .7rem; }
+            .login-icon { width: 42px; height: 42px; }
+            .form-options { flex-direction: column; align-items: flex-start; }
+            .form-group label { font-size: .75rem; }
+        }
     </style>
 </head>
 <body>

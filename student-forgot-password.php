@@ -79,6 +79,19 @@ if ($reset !== null) unset($_SESSION['_student_reset_show']);
         .btn-copy.copied { background:#1e7e34; }
         .warn-box { background: rgba(255,193,7,.1); border:1px solid rgba(255,193,7,.3); color:#664d03; padding:.7rem .85rem; border-radius:8px; font-size:.8rem; line-height:1.5; margin-bottom:1rem; }
         .warn-box i { color:#856404; margin-right:.3rem; }
+        @media (max-width: 576px) {
+            .forgot-card { max-width: 95%; }
+            .forgot-card-body { padding: 1.15rem 1.15rem 1rem; }
+            .forgot-card-footer { padding: .85rem 1.15rem; }
+            .forgot-card-header { padding: 1.1rem 1.2rem 1rem; }
+            .forgot-card-header h1 { font-size: 1rem; }
+            .forgot-icon { width: 48px; height: 48px; }
+            .login-footer p { font-size: .75rem; }
+            .cred-row { flex-direction: column; }
+            .cred-label { min-width: auto; border-right: none; border-bottom: 1px solid var(--light-gray); padding: .5rem .75rem; font-size: .72rem; }
+            .cred-value { font-size: .9rem; padding: .55rem .75rem; }
+            .btn-copy { padding: .55rem .75rem; min-width: auto; }
+        }
     </style>
 </head>
 <body>

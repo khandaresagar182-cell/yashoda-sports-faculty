@@ -48,6 +48,12 @@ if (!$student) {
     exit('Student record not found.');
 }
 
+/* Locked profile: once submitted, the wizard is read-only and this
+ * page shows the "Submitted" confirmation screen instead — until
+ * faculty grants edit access (edit_unlocked = 1) on student-profile.php.
+ * Re-submitting resets the flag back to 0, re-locking the form. */
+$formLocked = student_form_locked($student);
+
 /* -----------------------------------------------------------------
  * Determine the active step
  * ----------------------------------------------------------------- */
@@ -67,9 +73,17 @@ $step = $requestedStep;
 $dept_code                  = (string)($student['department_code'] ?? '');
 $uses_father_first_name     = in_array($dept_code, ['engineering', 'pharmacy'], true);
 $is_pharm_faculty_department = in_array($dept_code, ['pharmacy', 'ytc_pharmacy', 'management', 'architecture'], true);
-$stores_roll_no             = in_array($dept_code, ['polytechnic', 'dpharm', 'pharmacy', 'ytc_pharmacy', 'management', 'architecture'], true);
+$stores_roll_no             = in_array($dept_code, ['engineering', 'polytechnic', 'dpharm', 'pharmacy', 'ytc_pharmacy', 'management', 'architecture'], true);
+$shows_mother_name_field    = $is_pharm_faculty_department || $uses_father_first_name;
 $parent_name_label          = $uses_father_first_name ? "Father's First Name" : 'Mother Name';
 $parent_name_required       = $uses_father_first_name;
+// Every department except Polytechnic uses the Shivaji University eligibility
+// proforma for the Final Team PDF export, which needs a "Duration of Course"
+// value that can't be reliably guessed from the free-text Program field.
+$needs_course_duration      = $dept_code !== 'polytechnic';
+// The Shivaji proforma also has an "Aadhar Number" column; Polytechnic's own
+// form does not, so Aadhar is only required off the polytechnic path.
+$aadhar_required            = $dept_code !== 'polytechnic';
 
 /* -----------------------------------------------------------------
  * Game-checkbox picker (Step 3) — loaded only for picker depts.
@@ -86,7 +100,7 @@ $game_catalog = db_select(
     [(int)$student['department_id']], 'i'
 );
 $uses_game_picker = !empty($game_catalog);
-$game_max_picks   = $uses_game_picker ? (int)$game_catalog[0]['max_picks'] : 0;
+$game_total_available = count($game_catalog);
 
 $selected_games = [];
 if ($uses_game_picker) {
@@ -113,9 +127,23 @@ $documents = db_select(
     [$meId, (int)$student['department_id']], 'ii'
 );
 
+// The Gap certificate is only mandatory for students who answered "Yes"
+// to "Gap / Year Drop?" in Step 2 — everyone else sees it as optional.
+$hasGapYear = (int)($student['has_gap_year'] ?? 0) === 1;
+foreach ($documents as &$d) {
+    if (stripos((string)$d['document_name'], 'gap certificate') === 0) {
+        $d['is_required'] = $hasGapYear ? 1 : 0;
+    }
+}
+unset($d);
+
 $required_total   = 0;
 $required_uploaded = 0;
+$has_bank_passbook = false;
 foreach ($documents as $d) {
+    if (strcasecmp(trim((string)$d['document_name']), 'Bank passbook') === 0) {
+        $has_bank_passbook = true;
+    }
     if ((int)($d['is_required'] ?? 0) === 1) {
         $required_total++;
         if (!empty($d['file_path'])) $required_uploaded++;
@@ -159,6 +187,27 @@ function game_icon_for(string $code): string {
         'taekwondo'    => 'fa-solid fa-user-ninja',
         'baseball'     => 'fa-solid fa-baseball',
         'shooting_ball' => 'fa-solid fa-crosshairs',
+        // v43 unified catalogue — remaining codes
+        'archery'          => 'fa-solid fa-bullseye',
+        'body_building'    => 'fa-solid fa-dumbbell',
+        'canoeing_kayaking' => 'fa-solid fa-sailboat',
+        'cross_country'    => 'fa-solid fa-person-running',
+        'cycling'          => 'fa-solid fa-bicycle',
+        'fencing'          => 'fa-solid fa-khanda',
+        'gymnastics'       => 'fa-solid fa-person-falling',
+        'judo'             => 'fa-solid fa-hand-fist',
+        'karate'           => 'fa-solid fa-hand-fist',
+        'lawn_tennis'      => 'fa-solid fa-table-tennis-paddle-ball',
+        'mallakhamb'       => 'fa-solid fa-person-rays',
+        'power_lifting'    => 'fa-solid fa-dumbbell',
+        'rope_mallakhamb'  => 'fa-solid fa-person-rays',
+        'rowing'           => 'fa-solid fa-sailboat',
+        'rugby'            => 'fa-solid fa-football',
+        'shooting'         => 'fa-solid fa-crosshairs',
+        'track_cycling'    => 'fa-solid fa-bicycle',
+        'weight_lifting'   => 'fa-solid fa-dumbbell',
+        'wushu'            => 'fa-solid fa-hand-fist',
+        'yoga'             => 'fa-solid fa-spa',
     ];
     return $map[$code] ?? 'fa-solid fa-trophy';
 }
@@ -189,7 +238,23 @@ $wizard_steps = [
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="<?= h(url('css/public.css')) ?>">
     <link rel="stylesheet" href="<?= h(url('css/admin.css')) ?>">
+    <?php if ($step === 1): ?>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <?php endif; ?>
+    <?php if ($step === 5): ?>
+    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+    <?php endif; ?>
     <style>
+        /* Date of Birth picker (flatpickr) — brand colors, quick year jump */
+        .flatpickr-calendar { border-radius: 10px; box-shadow: 0 12px 30px rgba(0,0,0,.18); }
+        .flatpickr-months .flatpickr-month, .flatpickr-current-month .flatpickr-monthDropdown-months,
+        .flatpickr-current-month input.cur-year { color: var(--primary-navy); fill: var(--primary-navy); }
+        .flatpickr-current-month input.cur-year { font-weight: 600; }
+        span.flatpickr-weekday { color: var(--primary-navy); font-weight: 600; }
+        .flatpickr-day.selected, .flatpickr-day.selected:hover { background: var(--primary-navy); border-color: var(--primary-navy); }
+        .flatpickr-day.today { border-color: var(--accent-gold); }
+        .flatpickr-day.today:hover { background: var(--accent-gold); border-color: var(--accent-gold); }
+        .flatpickr-day:hover { background: var(--off-white); }
         .student-topbar { background:#fff; border-bottom:1px solid var(--light-gray); padding:.7rem 1.25rem; display:flex; align-items:center; justify-content:space-between; box-shadow: 0 2px 6px rgba(0,0,0,.04); position:sticky; top:0; z-index:50; }
         .student-topbar .brand { display:flex; align-items:center; gap:.7rem; font-weight:700; color: var(--primary-navy); }
         .student-topbar .brand img { width:34px; height:34px; object-fit:contain; }
@@ -447,6 +512,11 @@ $wizard_steps = [
         .doc-card { border:1px solid var(--light-gray); border-radius:10px; padding:1rem 1.1rem; margin-bottom:.7rem; background:#fff; transition: var(--transition-smooth); }
         .doc-card.uploaded { border-color: rgba(25,135,84,.35); background: rgba(25,135,84,.04); }
         .doc-card .doc-head { display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-bottom:.5rem; flex-wrap:wrap; }
+        .doc-card .doc-head-main { display:flex; align-items:center; gap:.7rem; min-width:0; }
+        .doc-thumb { width:56px; height:56px; flex-shrink:0; border-radius:8px; border:1px solid var(--light-gray); background: var(--off-white); display:flex; align-items:center; justify-content:center; overflow:hidden; color: var(--medium-gray); font-size:1.4rem; }
+        .doc-thumb img { width:100%; height:100%; object-fit:cover; }
+        .doc-thumb canvas.pdf-thumb-canvas { width:100%; height:100%; object-fit:cover; pointer-events:none; }
+        .doc-thumb:hover { border-color: var(--primary-navy); }
         .doc-card .doc-title { font-weight:600; color: var(--primary-navy); font-size:.92rem; display:flex; align-items:center; gap:.5rem; }
         .doc-card .doc-title .badge-required { font-size:.65rem; background: var(--accent-maroon); color:#fff; padding:.1rem .4rem; border-radius:50px; }
         .doc-card .doc-title .badge-ok { font-size:.65rem; background:#198754; color:#fff; padding:.1rem .4rem; border-radius:50px; }
@@ -460,16 +530,80 @@ $wizard_steps = [
         .doc-card input[type=file] { display:none; }
         .doc-card .doc-pick { display:inline-block; padding:.4rem .8rem; background: var(--primary-navy); color:#fff; border-radius:6px; cursor:pointer; font-size:.78rem; font-weight:600; }
         .doc-card .doc-pick:hover { background: var(--primary-navy-light); }
+        /* Bank account details — shown inside the "Bank passbook" doc-card only */
+        .bank-details { margin-top:.85rem; padding-top:.85rem; border-top:1px dashed var(--light-gray); }
+        .bank-details-title { font-size:.8rem; font-weight:700; color: var(--primary-navy); text-transform:uppercase; letter-spacing:.4px; display:flex; align-items:center; gap:.45rem; margin-bottom:.7rem; }
+        .bank-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:.5rem .9rem; }
+        .bank-grid .form-group { margin-bottom:.35rem; }
+        .bank-grid input { text-transform:none; }
+        .bank-grid input#bank_ifsc { text-transform:uppercase; }
+        .bank-details-actions { display:flex; align-items:center; gap:.8rem; flex-wrap:wrap; margin-top:.4rem; }
+        .bank-details-status { font-size:.78rem; font-weight:600; }
+        .bank-field-error { font-size:.74rem; font-weight:600; color:#b91c1c; margin-top:.3rem; min-height:1em; }
+        .bank-grid input.mismatch { border-color:#b91c1c; box-shadow:0 0 0 3px rgba(185,28,28,.12); }
+        .bank-grid input.match-ok { border-color:#198754; }
 
         /* ---------------- Preview step ---------------- */
-        .preview-table { width:100%; border-collapse:collapse; }
-        .preview-table tr.section-row td { background: var(--off-white); font-weight:700; color: var(--primary-navy); padding:.55rem .8rem; text-transform:uppercase; font-size:.75rem; letter-spacing:.4px; }
-        .preview-table td { padding:.55rem .8rem; border-bottom:1px solid var(--light-gray); font-size:.9rem; vertical-align: top; }
-        .preview-table td.k { width:200px; color: var(--medium-gray); font-weight:600; }
-        .preview-table td.v { color: var(--text-dark); }
-        .preview-table td.v em.empty { color: var(--medium-gray); font-style:normal; }
-        .preview-edit { text-align:right; }
-        .preview-edit a { font-size:.78rem; color: var(--primary-navy); text-decoration:none; font-weight:600; }
+        .preview-summary { display:flex; flex-direction:column; gap:1.15rem; }
+        .preview-card { border:1px solid var(--light-gray); border-radius:12px; background:#fff; overflow:hidden; box-shadow: 0 1px 3px rgba(15,23,42,.05); }
+        .preview-card-head { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:.85rem 1.1rem; background: linear-gradient(135deg, rgba(26,54,93,.05), rgba(26,54,93,.02)); border-bottom:1px solid var(--light-gray); flex-wrap:wrap; }
+        .preview-card-title { display:flex; align-items:center; gap:.65rem; font-weight:700; color: var(--primary-navy); font-size:.82rem; text-transform:uppercase; letter-spacing:.5px; }
+        .preview-card-icon { width:28px; height:28px; border-radius:8px; background: rgba(26,54,93,.1); color: var(--primary-navy); display:flex; align-items:center; justify-content:center; font-size:.85rem; flex-shrink:0; }
+        .preview-edit-link { display:inline-flex; align-items:center; gap:.35rem; font-size:.75rem; font-weight:600; color: var(--primary-navy); text-decoration:none; padding:.32rem .75rem; border:1px solid var(--light-gray); border-radius:50px; background:#fff; transition: var(--transition-smooth); flex-shrink:0; }
+        .preview-edit-link:hover { background: var(--primary-navy); color:#fff; border-color: var(--primary-navy); }
+        .preview-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+        .preview-field { padding:.85rem 1.1rem; border-bottom:1px solid #f0f2f5; }
+        .preview-field-label { display:block; font-size:.7rem; font-weight:600; color: var(--medium-gray); text-transform:uppercase; letter-spacing:.4px; margin-bottom:.32rem; }
+        .preview-field-value { display:block; font-size:.9rem; color: var(--text-dark); font-weight:600; word-break:break-word; line-height:1.4; }
+        .preview-field-value a { color: var(--primary-navy); font-weight:600; }
+        .preview-card em.empty { color: var(--medium-gray); font-style:normal; font-weight:500; }
+        .preview-field--full { grid-column: 1 / -1; }
+
+        .preview-doc-list { display:flex; flex-direction:column; }
+        .preview-doc-row { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:.8rem 1.1rem; border-bottom:1px solid #f0f2f5; flex-wrap:wrap; }
+        .preview-doc-row:last-child { border-bottom:none; }
+        .preview-doc-name { font-size:.87rem; font-weight:600; color: var(--text-dark); }
+        .preview-doc-status { display:flex; align-items:center; gap:.55rem; font-size:.85rem; }
+
+        .badge-ok, .badge-required { display:inline-flex; align-items:center; gap:.3rem; font-size:.7rem; font-weight:700; padding:.2rem .55rem; border-radius:50px; letter-spacing:.2px; }
+        .badge-ok { background: rgba(25,135,84,.12); color:#146c43; }
+        .badge-required { background: rgba(220,53,69,.12); color:#b91c1c; }
+
+        /* ---------------- Submitted / locked screen ---------------- */
+        @keyframes submittedPopIn { 0% { transform: scale(.6); opacity:0; } 60% { transform: scale(1.05); opacity:1; } 100% { transform: scale(1); opacity:1; } }
+        @keyframes submittedCircleDraw { to { stroke-dashoffset: 0; } }
+        @keyframes submittedCheckDraw { to { stroke-dashoffset: 0; } }
+        @keyframes submittedFadeUp { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform: translateY(0); } }
+        @keyframes submittedRingPing { 0% { transform: scale(.7); opacity:.5; } 100% { transform: scale(1.9); opacity:0; } }
+        @keyframes submittedBounce { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+
+        .submitted-card { background:#fff; border-radius:16px; box-shadow: 0 4px 24px rgba(26,54,93,.08), 0 1px 3px rgba(0,0,0,.04); border:1px solid rgba(26,54,93,.06); overflow:hidden; }
+        .submitted-hero { text-align:center; padding:2.6rem 2rem 2rem; background: linear-gradient(135deg, rgba(25,135,84,.05), rgba(26,54,93,.03)); }
+        .submitted-check-wrap { position:relative; width:92px; height:92px; margin:0 auto 1.3rem; display:flex; align-items:center; justify-content:center; }
+        .submitted-ring { position:absolute; inset:0; border-radius:50%; border:2px solid rgba(25,135,84,.4); animation: submittedRingPing 1.8s ease-out 1; animation-fill-mode: forwards; }
+        .submitted-ring--2 { animation-delay:.35s; }
+        .submitted-check { width:92px; height:92px; position:relative; z-index:1; animation: submittedPopIn .5s cubic-bezier(.34,1.56,.64,1) both; }
+        .submitted-check-circle { stroke:#198754; stroke-width:2.5; stroke-dasharray:151; stroke-dashoffset:151; animation: submittedCircleDraw .6s ease-out .15s forwards; }
+        .submitted-check-mark { stroke:#198754; stroke-width:3.5; stroke-linecap:round; stroke-linejoin:round; stroke-dasharray:40; stroke-dashoffset:40; animation: submittedCheckDraw .4s ease-out .65s forwards; }
+        .submitted-title { font-size:1.35rem; font-weight:800; color: var(--primary-navy); margin:0 0 .55rem; opacity:0; animation: submittedFadeUp .5s ease-out .8s forwards; }
+        .submitted-sub { font-size:.94rem; color: var(--medium-gray); margin:0 auto 1rem; max-width:480px; line-height:1.6; opacity:0; animation: submittedFadeUp .5s ease-out .92s forwards; }
+        .submitted-sub strong { color: var(--text-dark); }
+        .submitted-meta { display:inline-flex; align-items:center; gap:.45rem; font-size:.8rem; font-weight:600; color:#146c43; background: rgba(25,135,84,.1); border:1px solid rgba(25,135,84,.25); padding:.4rem .9rem; border-radius:50px; opacity:0; animation: submittedFadeUp .5s ease-out 1.02s forwards; }
+
+        .submitted-next { display:flex; align-items:flex-start; gap:1rem; padding:1.4rem 2rem; border-top:1px solid var(--light-gray); background: var(--off-white); opacity:0; animation: submittedFadeUp .5s ease-out 1.15s forwards; }
+        .submitted-next-icon { flex-shrink:0; width:44px; height:44px; border-radius:50%; background: linear-gradient(135deg, var(--primary-navy), var(--primary-navy-dark)); color:#fff; display:flex; align-items:center; justify-content:center; font-size:1.05rem; animation: submittedBounce 2.2s ease-in-out 1.6s infinite; }
+        .submitted-next-body { flex:1; min-width:0; }
+        .submitted-next-title { font-weight:700; color: var(--primary-navy); font-size:.92rem; margin-bottom:.3rem; }
+        .submitted-next-text { font-size:.86rem; color: var(--medium-gray); line-height:1.6; margin:0; }
+
+        .submitted-footnote { display:flex; align-items:center; gap:.5rem; justify-content:center; padding:.9rem 1.5rem; font-size:.78rem; color: var(--medium-gray); border-top:1px solid var(--light-gray); }
+
+        @media (prefers-reduced-motion: reduce) {
+            .submitted-ring, .submitted-check, .submitted-check-circle, .submitted-check-mark,
+            .submitted-title, .submitted-sub, .submitted-meta, .submitted-next, .submitted-next-icon {
+                animation: none !important; opacity:1 !important; stroke-dashoffset:0 !important; transform:none !important;
+            }
+        }
 
         /* Yes/No pill radios (Step 4) */
         .yesno-group { display:flex; gap:.6rem; flex-wrap:wrap; }
@@ -483,6 +617,14 @@ $wizard_steps = [
         .req-star { color:#c53030; margin-left:.15rem; font-weight:700; }
         .form-group .hint.yesno-error { margin-top:.45rem; }
 
+        /* Smaller Yes/No pills for the per-level participation questions (Step 4) */
+        .yesno-group--sm .yesno-opt { padding:.32rem .75rem; font-size:.85rem; }
+        .yesno-group--sm .yesno-circle { width:14px; height:14px; }
+        .yesno-group--sm .yesno-opt.selected .yesno-circle::after { width:6px; height:6px; }
+        .participation-level { padding:.9rem 1rem; border:1px solid var(--light-gray); border-radius:10px; margin-bottom:.9rem; }
+        .participation-level .form-group:last-child { margin-bottom:0; }
+        .participation-level-label { font-weight:600; font-size:.92rem; color: var(--text-dark); margin-bottom:.5rem; display:block; }
+
         /* ---------------- Game-checkbox picker (Step 3) ----------------
            Government-form style: one game per row, compact, with a
            thin vertical accent on the selected item. */
@@ -492,6 +634,13 @@ $wizard_steps = [
         .game-picker-counter.complete strong { color:#198754; }
         .game-picker-bar { height:4px; background:#e5e7eb; border-radius:2px; overflow:hidden; margin-bottom:.85rem; }
         .game-picker-bar > div { height:100%; background: linear-gradient(90deg, #1a365d, #2c5282); transition: width .2s ease; width:0; }
+        .game-picker-search { position:relative; margin-bottom:.7rem; }
+        .game-picker-search i { position:absolute; left:.8rem; top:50%; transform:translateY(-50%); color: var(--medium-gray); font-size:.82rem; pointer-events:none; }
+        .game-picker-search input { width:100%; padding:.55rem .8rem .55rem 2.1rem; border:1px solid var(--light-gray); border-radius:6px; font-size:.88rem; font-family: var(--font-primary); color: var(--text-dark); outline:none; transition: border-color .12s ease, box-shadow .12s ease; }
+        .game-picker-search input:focus { border-color: var(--primary-navy); box-shadow: 0 0 0 3px rgba(26,54,93,.1); }
+        .game-row.filtered-out { display:none; }
+        .game-list-empty { display:none; padding:.9rem .85rem; font-size:.85rem; color: var(--medium-gray); font-style:italic; text-align:center; }
+        .game-list-empty.show { display:block; }
         .game-list { display:flex; flex-direction:column; border:1px solid var(--light-gray); border-radius:6px; overflow:hidden; background:#fff; }
         .game-row { display:flex; align-items:center; gap:.7rem; padding:.45rem .85rem; border-bottom:1px solid #edf0f3; cursor:pointer; user-select:none; transition: background .12s ease; position:relative; font-size:.88rem; color: var(--text-dark); background:#fff; }
         .game-row:last-child { border-bottom:none; }
@@ -523,6 +672,44 @@ $wizard_steps = [
         .game-chip { display:inline-flex; align-items:center; gap:.35rem; padding:.2rem .55rem; background: rgba(26,54,93,.08); color:#0a1f3d; border:1px solid rgba(26,54,93,.18); border-radius:3px; font-size:.78rem; font-weight:600; margin:.1rem .2rem .1rem 0; }
         .game-chip i { color: var(--primary-navy); }
         .game-chip.empty { background: transparent; color: var(--medium-gray); border:1px dashed var(--light-gray); font-weight:500; font-style:italic; }
+
+        /* ---- Student Dashboard Mobile ---- */
+        @media (max-width: 767px) {
+            .student-topbar { padding: .55rem .85rem; }
+            .student-topbar .brand img { width: 28px; height: 28px; }
+            .student-topbar .brand div:first-of-type { font-size: .85rem !important; }
+            .student-topbar .brand div:last-of-type { display: none; }
+            .student-topbar .user-pill { font-size: .78rem; padding: .3rem .6rem .3rem .3rem; gap: .4rem; }
+            .student-topbar .user-pill .avatar { width: 26px; height: 26px; font-size: .7rem; }
+            .content-body { padding: 1rem .85rem 2rem; }
+            .welcome-banner { padding: .85rem 1rem; border-radius: 10px; flex-direction: column; align-items: flex-start; }
+            .welcome-banner h1 { font-size: 1rem; }
+            .welcome-banner p { font-size: .8rem; }
+            .wizard-card { border-radius: 12px; }
+            .preview-grid { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+            .submitted-hero { padding: 2rem 1.25rem 1.6rem; }
+            .submitted-next { padding: 1.2rem 1.25rem; }
+        }
+        @media (max-width: 480px) {
+            .student-topbar .user-pill span { display: none; }
+            .student-topbar .user-pill { padding: .3rem .4rem; }
+            .content-body { padding: .75rem .65rem 1.5rem; }
+            .welcome-banner { padding: .75rem .85rem; gap: .5rem; }
+            .welcome-banner h1 { font-size: .92rem; }
+            .alert-banner { font-size: .82rem; padding: .65rem .75rem; }
+            /* Preview cards responsive */
+            .preview-grid { grid-template-columns: 1fr; }
+            .preview-field { padding: .7rem .9rem; }
+            .preview-card-head { padding: .7rem .9rem; }
+            .preview-doc-row { padding: .7rem .9rem; }
+            /* Submitted screen responsive */
+            .submitted-check-wrap, .submitted-check { width: 76px; height: 76px; }
+            .submitted-title { font-size: 1.12rem; }
+            .submitted-next { flex-direction: column; align-items: flex-start; }
+            /* Action buttons full width */
+            .btn-save, .btn-cancel, .btn-next, .btn-back { width: 100%; justify-content: center; }
+            .form-actions { flex-direction: column; gap: .5rem; }
+        }
     </style>
 </head>
 <body>
@@ -562,14 +749,55 @@ $wizard_steps = [
         <?php if ($flash_err): ?>
             <div class="alert-banner error"><i class="bi bi-exclamation-circle"></i> <?= h($flash_err['msg']) ?></div>
         <?php endif; ?>
-        <?php if ((int)($student['is_self_registered'] ?? 0) === 1
+        <?php if (!$formLocked && (int)($student['is_self_registered'] ?? 0) === 1
                   && (empty($student['sport_1']) || empty($student['enrollment_no']) || str_starts_with((string)$student['enrollment_no'], 'SELF-'))): ?>
             <div class="alert-banner warn">
                 <i class="bi bi-info-circle"></i>
-                Please complete your profile using the wizard below. On Step 2 (Academic Details) you'll need to enter your official college enrollment number.
+                Please complete your profile using the wizard below. On Step 2 (Academic Details) you'll need to enter your official college PRN/Enrollment number.
             </div>
         <?php endif; ?>
 
+        <?php if ($formLocked): ?>
+        <div class="submitted-card">
+            <div class="submitted-hero">
+                <div class="submitted-check-wrap">
+                    <span class="submitted-ring"></span>
+                    <span class="submitted-ring submitted-ring--2"></span>
+                    <svg class="submitted-check" viewBox="0 0 52 52">
+                        <circle class="submitted-check-circle" cx="26" cy="26" r="24" fill="none"/>
+                        <path class="submitted-check-mark" fill="none" d="M14 27l7 7 17-17"/>
+                    </svg>
+                </div>
+                <h2 class="submitted-title">Profile Submitted Successfully!</h2>
+                <p class="submitted-sub">
+                    Your profile has been sent to the <strong>Faculty of Sports, <?= h($student['dept_name']) ?></strong> for review.
+                </p>
+                <?php if (!empty($student['form_submitted_at'])): ?>
+                    <div class="submitted-meta">
+                        <i class="bi bi-calendar-check"></i>
+                        Submitted on <?= h(date('d M Y \a\t h:i A', strtotime((string)$student['form_submitted_at']))) ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+
+            <div class="submitted-next">
+                <div class="submitted-next-icon"><i class="bi bi-telephone-fill"></i></div>
+                <div class="submitted-next-body">
+                    <div class="submitted-next-title">What happens next?</div>
+                    <p class="submitted-next-text">
+                        The Faculty of Sports will review your details and documents. If anything
+                        needs to be corrected or added, they'll reach out to you directly — or
+                        enable editing on your profile so you can update it yourself.
+                    </p>
+                </div>
+            </div>
+
+            <div class="submitted-footnote">
+                <i class="bi bi-lock-fill"></i>
+                Your profile is locked for editing until your faculty re-opens it.
+            </div>
+        </div>
+        <?php else: ?>
         <div class="wizard-card">
             <!-- ============== Step Wizard Pipeline ============== -->
             <div class="pipeline">
@@ -639,9 +867,9 @@ $wizard_steps = [
                                     <div class="hint">Engineering students: enter your father's first name here. This is also stored as the father field on your record.</div>
                                 <?php endif; ?>
                             </div>
-                            <?php if ($is_pharm_faculty_department && !$uses_father_first_name): ?>
+                            <?php if ($shows_mother_name_field): ?>
                             <div class="form-group">
-                                <label for="mother_name">Mother Name</label>
+                                <label for="mother_name">Mother's Name</label>
                                 <input type="text" id="mother_name" name="mother_name"
                                        value="<?= h($student['mother_name'] ?? '') ?>"
                                        placeholder="Enter your mother's name">
@@ -649,10 +877,18 @@ $wizard_steps = [
                             <?php endif; ?>
                             <div class="form-group">
                                 <label for="dob">Date of Birth *</label>
-                                <input type="date" id="dob" name="dob" required
-                                       min="1990-01-01" max="<?= date('Y-m-d') ?>"
+                                <input type="text" id="dob" name="dob" required autocomplete="off"
+                                       placeholder="dd-mm-yyyy"
                                        value="<?= h($student['dob'] ?? '') ?>">
                                 <div class="hint">If you change this, your login password also changes (to the new DOB in DDMMYYYY).</div>
+                            </div>
+                            <div class="form-group">
+                                <label for="aadhar_number">Aadhar Number<?= $aadhar_required ? ' *' : '' ?></label>
+                                <input type="text" id="aadhar_number" name="aadhar_number"<?= $aadhar_required ? ' required' : '' ?>
+                                       pattern="[0-9]{12}" maxlength="12" inputmode="numeric" autocomplete="off"
+                                       placeholder="12-digit Aadhar number"
+                                       value="<?= h($student['aadhar_number'] ?? '') ?>">
+                                <div class="hint">Exactly 12 digits, no spaces. Printed on the Shivaji University eligibility proforma.</div>
                             </div>
                             <div class="form-group">
                                 <label for="gender">Gender *</label>
@@ -688,11 +924,41 @@ $wizard_steps = [
                                        pattern="[0-9]{10}" maxlength="10" inputmode="numeric"
                                        value="<?= h($student['mobile'] ?? '') ?>">
                             </div>
+                            <div class="form-group">
+                                <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex-wrap:wrap;margin-bottom:.5rem">
+                                    <label for="whatsapp_no" style="margin:0">WhatsApp No.</label>
+                                    <label for="same_as_mobile" style="display:inline-flex;align-items:center;gap:.4rem;margin:0;text-transform:none;letter-spacing:normal;font-weight:700;cursor:pointer">
+                                        <input type="checkbox" id="same_as_mobile" name="same_as_mobile" value="1" style="width:auto"
+                                               <?php $waNo = $student['whatsapp_no'] ?? ''; $mobNo = $student['mobile'] ?? ''; ?>
+                                               <?= ($waNo !== '' && $waNo === $mobNo) ? 'checked' : '' ?>>
+                                        WhatsApp number same as Mobile No.
+                                    </label>
+                                </div>
+                                <input type="tel" id="whatsapp_no" name="whatsapp_no"
+                                       pattern="[0-9]{10}" maxlength="10" inputmode="numeric"
+                                       placeholder="Leave blank if same as Mobile No."
+                                       value="<?= h($student['whatsapp_no'] ?? '') ?>">
+                            </div>
                             <div class="form-group" style="grid-column:1/-1">
-                                <label for="address">Address *</label>
-                                <input type="text" id="address" name="address" required maxlength="500"
+                                <label for="permanent_address">Permanent Address *</label>
+                                <input type="text" id="permanent_address" name="permanent_address" required maxlength="500"
                                        placeholder="House no / street, area, city, state, pincode"
-                                       value="<?= h($student['address'] ?? '') ?>">
+                                       value="<?= h($student['permanent_address'] ?? $student['address'] ?? '') ?>">
+                            </div>
+                            <div class="form-group" style="grid-column:1/-1;margin-bottom:.3rem">
+                                <label style="display:flex;align-items:center;gap:.5rem;text-transform:none;letter-spacing:normal;font-weight:700;cursor:pointer">
+                                    <input type="checkbox" id="same_as_permanent" name="same_as_permanent" value="1"
+                                           style="width:auto"
+                                           <?php $curAddr = $student['current_address'] ?? ''; $permAddr = $student['permanent_address'] ?? $student['address'] ?? ''; ?>
+                                           <?= ($curAddr !== '' && $curAddr === $permAddr) ? 'checked' : '' ?>>
+                                    Current address same as permanent address
+                                </label>
+                            </div>
+                            <div class="form-group" style="grid-column:1/-1" id="currentAddressGroup">
+                                <label for="current_address">Current Address *</label>
+                                <input type="text" id="current_address" name="current_address" maxlength="500"
+                                       placeholder="House no / street, area, city, state, pincode"
+                                       value="<?= h($student['current_address'] ?? '') ?>">
                             </div>
                         </div>
 
@@ -701,32 +967,49 @@ $wizard_steps = [
                         </div>
                     </form>
                 </div>
+                <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+                <script>
+                    flatpickr('#dob', {
+                        dateFormat: 'Y-m-d',
+                        altInput: true,
+                        altFormat: 'd-m-Y',
+                        minDate: '1995-01-01',
+                        maxDate: 'today',
+                        disableMobile: true
+                    });
+                </script>
 
             <?php elseif ($step === 2): ?>
                 <div class="wizard-head">
                     <h2><i class="bi bi-mortarboard" style="color: var(--accent-gold)"></i> Step 2 — Academic Details</h2>
-                    <p>Your faculty, enrollment number, roll number, program, and year of study.</p>
+                    <p>Your faculty, PRN/Enrollment number, roll number, program, and year of study.</p>
                 </div>
                 <div class="wizard-body">
-                    <form method="post" action="student_dashboard_process.php?step=2">
+                    <?php
+                        $gapYear = $student['has_gap_year'] ?? null;
+                        $gapYearPersisted = ($gapYear === 0 || $gapYear === 1);
+                        if ($gapYear === null) $gapYear = 0;
+                    ?>
+                    <form method="post" action="student_dashboard_process.php?step=2" id="academicForm">
                         <?= csrf_field() ?>
+                        <input type="hidden" name="has_gap_year" id="hasGapYearHidden" value="<?= $gapYearPersisted ? (int)$gapYear : '' ?>">
                         <div class="form-grid">
+                            <div class="form-group">
+                                <label for="enrollment_no">PRN/Enrollment No. *</label>
+                                <input type="text" id="enrollment_no" name="enrollment_no" required maxlength="40"
+                                       value="<?= h((string)($student['enrollment_no'] ?? '')) ?>"
+                                       placeholder="e.g. EN2025001">
+                                <?php if (empty($student['enrollment_no'])): ?>
+                                    <div class="hint">Please enter your official college PRN/Enrollment number. (If you don't have one yet, ask the Faculty of Sports.)</div>
+                                <?php else: ?>
+                                    <div class="hint">Your official college PRN/Enrollment number. Must be unique across all students.</div>
+                                <?php endif; ?>
+                            </div>
                             <div class="form-group">
                                 <label for="department_id">Faculty</label>
                                 <input type="text" readonly value="<?= h($student['dept_name']) ?>">
                                 <input type="hidden" name="department_id" value="<?= (int)$student['department_id'] ?>">
                                 <div class="hint">Set at registration. Contact the Faculty of Sports if you need to change it.</div>
-                            </div>
-                            <div class="form-group">
-                                <label for="enrollment_no">Enrollment No. *</label>
-                                <input type="text" id="enrollment_no" name="enrollment_no" required maxlength="40"
-                                       value="<?= h((string)($student['enrollment_no'] ?? '')) ?>"
-                                       placeholder="e.g. EN2025001">
-                                <?php if (empty($student['enrollment_no'])): ?>
-                                    <div class="hint">Please enter your official college enrollment number. (If you don't have one yet, ask the Faculty of Sports.)</div>
-                                <?php else: ?>
-                                    <div class="hint">Your official college enrollment number. Must be unique across all students.</div>
-                                <?php endif; ?>
                             </div>
                             <?php if ($stores_roll_no): ?>
                             <div class="form-group">
@@ -737,35 +1020,214 @@ $wizard_steps = [
                             </div>
                             <?php endif; ?>
                             <div class="form-group">
-                                <label for="program">Program / Branch *</label>
+                                <label for="program">Program *</label>
                                 <input type="text" id="program" name="program" required maxlength="120"
-                                       placeholder="e.g. B.E. Computer Engg."
+                                       placeholder="e.g. B.Tech, M.Tech"
                                        value="<?= h($student['program'] ?? '') ?>">
                             </div>
                             <div class="form-group">
-                                <label for="academic_year">Academic Year *</label>
-                                <select id="academic_year" name="academic_year" required>
+                                <label for="department_name">Department / Branch *</label>
+                                <input type="text" id="department_name" name="department_name" required maxlength="120"
+                                       placeholder="e.g. Computer Engineering"
+                                       value="<?= h($student['department_name'] ?? '') ?>">
+                            </div>
+                            <?php if ($needs_course_duration): ?>
+                            <div class="form-group">
+                                <label for="course_duration_years">Duration of Course *</label>
+                                <select id="course_duration_years" name="course_duration_years" required>
                                     <option value="">— Select —</option>
-                                    <?php foreach (academic_year_options() as $y): ?>
-                                        <option value="<?= h($y) ?>" <?= is_selected($y, $student['academic_year'] ?? '') ?>><?= h($y) ?></option>
+                                    <?php foreach (['2 Year', '3 Year', '4 Year', '5 Year', '6 Year'] as $dur): ?>
+                                        <option value="<?= h($dur) ?>" <?= is_selected($dur, $student['course_duration_years'] ?? '') ?>><?= h($dur) ?></option>
                                     <?php endforeach; ?>
                                 </select>
+                                <div class="hint">Total length of your program (e.g. B.Arch = 5 Year, MBA = 2 Year). Used on the Final Team eligibility form.</div>
                             </div>
+                            <?php endif; ?>
                             <div class="form-group">
-                                <label for="study_year">Year of Study *</label>
-                                <select id="study_year" name="study_year" required>
+                                <label for="study_year">Current Year in which studying *</label>
+                                <select id="study_year" name="study_year" required
+                                        data-saved-year="<?= h((string)($student['study_year'] ?? '')) ?>">
                                     <option value="">— Select —</option>
                                     <?php foreach (year_options() as $y): ?>
                                         <option value="<?= h($y) ?>" <?= is_selected($y, $student['study_year'] ?? '') ?>><?= h($y) ?> Year</option>
                                     <?php endforeach; ?>
                                 </select>
+                                <?php if ($needs_course_duration): ?>
+                                <div class="hint">Options follow the course duration selected above.</div>
+                                <?php endif; ?>
+                            </div>
+                            <div class="form-group">
+                                <label for="ssc_passing_year">SSC Passing Year *</label>
+                                <input type="text" id="ssc_passing_year" name="ssc_passing_year" required
+                                       maxlength="4" pattern="[0-9]{4}" inputmode="numeric"
+                                       placeholder="e.g. 2018"
+                                       value="<?= h((string)($student['ssc_passing_year'] ?? '')) ?>">
+                            </div>
+                            <div class="form-group">
+                                <label for="hsc_passing_year">HSC Passing Year</label>
+                                <input type="text" id="hsc_passing_year" name="hsc_passing_year"
+                                       maxlength="4" pattern="[0-9]{4}" inputmode="numeric"
+                                       placeholder="e.g. 2020"
+                                       value="<?= h((string)($student['hsc_passing_year'] ?? '')) ?>">
+                            </div>
+                            <div class="form-group">
+                                <label for="diploma_passing_year">Diploma Passing Year</label>
+                                <input type="text" id="diploma_passing_year" name="diploma_passing_year"
+                                       maxlength="4" pattern="[0-9]{4}" inputmode="numeric"
+                                       placeholder="e.g. 2022"
+                                       value="<?= h((string)($student['diploma_passing_year'] ?? '')) ?>">
                             </div>
                         </div>
+
+                        <div class="section-head"><i class="bi bi-calendar-check"></i> Date &amp; Year of First Admission to</div>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="first_admission_university_year">University / College *</label>
+                                <input type="text" id="first_admission_university_year" name="first_admission_university_year" required
+                                       maxlength="4" pattern="[0-9]{4}" inputmode="numeric"
+                                       placeholder="e.g. 2023"
+                                       value="<?= h((string)($student['first_admission_university_year'] ?? '')) ?>">
+                            </div>
+                            <div class="form-group">
+                                <label for="first_admission_course_year">Present Course *</label>
+                                <input type="text" id="first_admission_course_year" name="first_admission_course_year" required
+                                       maxlength="4" pattern="[0-9]{4}" inputmode="numeric"
+                                       placeholder="e.g. 2023"
+                                       value="<?= h((string)($student['first_admission_course_year'] ?? '')) ?>">
+                            </div>
+                            <div class="form-group">
+                                <label for="first_admission_class_year">Present Class *</label>
+                                <input type="text" id="first_admission_class_year" name="first_admission_class_year" required
+                                       maxlength="4" pattern="[0-9]{4}" inputmode="numeric"
+                                       placeholder="e.g. 2025"
+                                       value="<?= h((string)($student['first_admission_class_year'] ?? '')) ?>">
+                            </div>
+                        </div>
+
+                        <div class="section-head"><i class="bi bi-signpost-split"></i> Gap / Year Drop</div>
+                        <div class="form-group" data-required-group>
+                            <label>Gap / Year Drop? <span class="req-star" aria-hidden="true">*</span></label>
+                            <div class="yesno-group" role="radiogroup" aria-label="Gap / Year Drop?" aria-required="true">
+                                <label class="yesno-opt <?= (int)$gapYear === 1 ? 'selected' : '' ?>" data-val="1">
+                                    <input type="radio" name="has_gap_year_radio" value="1" <?= (int)$gapYear === 1 ? 'checked' : '' ?>>
+                                    <span class="yesno-circle"></span>
+                                    <span class="yesno-text">Yes</span>
+                                </label>
+                                <label class="yesno-opt <?= (int)$gapYear === 0 ? 'selected' : '' ?>" data-val="0">
+                                    <input type="radio" name="has_gap_year_radio" value="0" <?= (int)$gapYear === 0 ? 'checked' : '' ?>>
+                                    <span class="yesno-circle"></span>
+                                    <span class="yesno-text">No</span>
+                                </label>
+                            </div>
+                            <div class="hint yesno-error" id="gapYearError" style="display:none;color:#c53030;font-weight:600">Please choose Yes or No before continuing.</div>
+                        </div>
+                        <div class="form-group" id="gapYearDetailGroup" style="<?= (int)$gapYear === 1 ? '' : 'display:none' ?>">
+                            <label for="gap_year_detail">Please Mention Year</label>
+                            <input type="text" id="gap_year_detail" name="gap_year_detail" maxlength="100"
+                                   placeholder="e.g. 2022"
+                                   value="<?= h((string)($student['gap_year_detail'] ?? '')) ?>">
+                        </div>
+
                         <div style="margin-top:1.4rem; display:flex; gap:.7rem; align-items:center; flex-wrap:wrap">
                             <a href="student-dashboard.php?step=1" class="btn-cancel btn-back"><i class="bi bi-arrow-left"></i> Back</a>
                             <button type="submit" class="btn-save btn-next"><i class="bi bi-arrow-right-circle"></i> Save &amp; Continue</button>
                         </div>
                     </form>
+                    <script>
+                    (function () {
+                        var form   = document.getElementById('academicForm');
+                        if (!form) return;
+                        var opts   = form.querySelectorAll('.yesno-opt');
+                        var group  = document.getElementById('gapYearDetailGroup');
+                        var hidden = document.getElementById('hasGapYearHidden');
+                        var detail = document.getElementById('gap_year_detail');
+                        var errBox = document.getElementById('gapYearError');
+                        var radios = form.querySelectorAll('input[name="has_gap_year_radio"]');
+                        function getChosen() {
+                            for (var i = 0; i < radios.length; i++) {
+                                if (radios[i].checked) return radios[i].value;
+                            }
+                            return null;
+                        }
+                        function sync() {
+                            var chosen = getChosen();
+                            if (chosen === null) {
+                                if (errBox) errBox.style.display = 'none';
+                                return;
+                            }
+                            hidden.value = chosen;
+                            opts.forEach(function (o) {
+                                o.classList.toggle('selected', o.getAttribute('data-val') === chosen);
+                            });
+                            if (errBox) errBox.style.display = 'none';
+                            if (chosen === '1') {
+                                group.style.display = '';
+                            } else {
+                                group.style.display = 'none';
+                                detail.value = '';
+                            }
+                        }
+                        opts.forEach(function (o) {
+                            o.addEventListener('click', function () {
+                                var r = o.querySelector('input[type=radio]');
+                                r.checked = true;
+                                sync();
+                            });
+                        });
+
+                        // "Current Year in which studying" follows "Duration of Course":
+                        // a 2-Year course offers First/Second, a 3-Year adds Third, and
+                        // 4-Year and longer add "Final" (resolved to the real ordinal on
+                        // the eligibility form). study_year itself stays a 4-bucket field.
+                        var durSel  = document.getElementById('course_duration_years');
+                        var yearSel = document.getElementById('study_year');
+                        if (yearSel) {
+                            var yearSaved = yearSel.getAttribute('data-saved-year') || '';
+                            var yearDefs  = [
+                                { v: 'First',  min: 1 },
+                                { v: 'Second', min: 2 },
+                                { v: 'Third',  min: 3 },
+                                { v: 'Final',  min: 4 }
+                            ];
+                            var ordinal = function (x) {
+                                var s = ['th', 'st', 'nd', 'rd'], m = x % 100;
+                                return x + (s[(m - 20) % 10] || s[m] || s[0]);
+                            };
+                            var syncStudyYears = function () {
+                                var n = durSel ? parseInt((durSel.value || '').replace(/\D/g, ''), 10) : 0;
+                                if (!n || isNaN(n)) { n = 99; } // no duration chosen yet -> show all
+                                var html = '<option value="">— Select —</option>';
+                                var keepSaved = false;
+                                yearDefs.forEach(function (d) {
+                                    if (n < d.min) { return; }
+                                    var label = (d.v === 'Final' && n >= 4 && n <= 6)
+                                        ? 'Final Year (' + ordinal(n) + ')'
+                                        : d.v + ' Year';
+                                    var sel = d.v === yearSaved ? ' selected' : '';
+                                    if (sel) { keepSaved = true; }
+                                    html += '<option value="' + d.v + '"' + sel + '>' + label + '</option>';
+                                });
+                                yearSel.innerHTML = html;
+                                if (!keepSaved) { yearSel.value = ''; }
+                            };
+                            if (durSel) { durSel.addEventListener('change', syncStudyYears); }
+                            syncStudyYears();
+                        }
+
+                        form.addEventListener('submit', function (e) {
+                            if (getChosen() === null) {
+                                e.preventDefault();
+                                if (errBox) {
+                                    errBox.style.display = '';
+                                    errBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                }
+                                var g = form.querySelector('.yesno-group');
+                                g.style.boxShadow = '0 0 0 3px rgba(197,48,48,.25)';
+                                setTimeout(function () { g.style.boxShadow = ''; }, 1500);
+                            }
+                        });
+                    })();
+                    </script>
                 </div>
 
             <?php elseif ($step === 3): ?>
@@ -773,27 +1235,34 @@ $wizard_steps = [
                     <h2><i class="bi bi-trophy" style="color: var(--accent-gold)"></i> Step 3 — Sports Information</h2>
                     <p>
                         <?php if ($uses_game_picker): ?>
-                            Pick the <strong>4 games</strong> you want to enroll in for <?= h($student['dept_name']) ?>.
+                            Pick the games you want to enroll in for <?= h($student['dept_name']) ?> &mdash; select as many as you like.
                             Faculty will assign you to events based on your choices.
                         <?php else: ?>
-                            Primary sport, secondary sport, and any achievements you'd like to record.
+                            Primary sport and secondary sport.
                         <?php endif; ?>
                     </p>
                 </div>
                 <div class="wizard-body">
                     <?php if ($uses_game_picker): ?>
-                        <form method="post" action="student_dashboard_process.php?step=3" id="gamePickerForm" data-max-picks="<?= (int)$game_max_picks ?>">
+                        <form method="post" action="student_dashboard_process.php?step=3" id="gamePickerForm" data-total-games="<?= (int)$game_total_available ?>">
                             <?= csrf_field() ?>
                             <div class="game-picker-head">
                                 <div class="game-picker-counter" id="gameCounter">
                                     <strong id="gameCountNum"><?= count($selected_games) ?></strong>
                                     /
-                                    <strong><?= (int)$game_max_picks ?></strong>
+                                    <strong><?= (int)$game_total_available ?></strong>
                                     selected
                                 </div>
-                                <div class="hint" style="margin:0">Check the 4 games you want to play.</div>
+                                <div class="hint" style="margin:0">Check as many games as you want to play.</div>
                             </div>
-                            <div class="game-picker-bar"><div id="gameBarFill" style="width: <?= (int)round(count($selected_games) / max(1, $game_max_picks) * 100) ?>%"></div></div>
+                            <div class="game-picker-bar"><div id="gameBarFill" style="width: <?= (int)round(count($selected_games) / max(1, $game_total_available) * 100) ?>%"></div></div>
+
+                            <?php if ($game_total_available > 8): ?>
+                            <div class="game-picker-search">
+                                <i class="fa-solid fa-magnifying-glass"></i>
+                                <input type="text" id="gameSearch" placeholder="Search games&hellip;" autocomplete="off" aria-label="Search games">
+                            </div>
+                            <?php endif; ?>
 
                             <div class="game-list" id="gameGrid" role="list">
                                 <?php foreach ($game_catalog as $g):
@@ -808,18 +1277,9 @@ $wizard_steps = [
                                         <span class="game-name"><?= h($name) ?></span>
                                     </label>
                                 <?php endforeach; ?>
+                                <div class="game-list-empty" id="gameListEmpty">No games match your search.</div>
                             </div>
                             <div class="game-picker-error" id="gamePickerError" role="alert" aria-live="polite"></div>
-
-                            <div class="section-head" style="margin-top:1.6rem"><i class="bi bi-award"></i> Achievements / Notes</div>
-                            <div class="form-grid">
-                                <div class="form-group" style="grid-column:1/-1">
-                                    <label for="achievements">Achievements / Notes</label>
-                                    <textarea id="achievements" name="achievements"
-                                              placeholder="One per line. E.g. 'Gold - Inter-College Kho-Kho 2025'"><?= h($student['achievements'] ?? '') ?></textarea>
-                                    <div class="hint">Optional. Tournament wins, selections, etc.</div>
-                                </div>
-                            </div>
 
                             <div style="margin-top:1.4rem; display:flex; gap:.7rem; align-items:center; flex-wrap:wrap">
                                 <a href="student-dashboard.php?step=2" class="btn-cancel btn-back"><i class="bi bi-arrow-left"></i> Back</a>
@@ -841,11 +1301,6 @@ $wizard_steps = [
                                     <input type="text" id="sport_2" name="sport_2"
                                            value="<?= h($student['sport_2'] ?? '') ?>"
                                            placeholder="e.g. Athletics">
-                                </div>
-                                <div class="form-group" style="grid-column:1/-1">
-                                    <label for="achievements">Achievements / Notes</label>
-                                    <textarea id="achievements" name="achievements"
-                                              placeholder="One per line. E.g. 'Gold - Inter-College Cricket 2025'"><?= h($student['achievements'] ?? '') ?></textarea>
                                 </div>
                             </div>
                             <div style="margin-top:1.4rem; display:flex; gap:.7rem; align-items:center; flex-wrap:wrap">
@@ -878,7 +1333,7 @@ $wizard_steps = [
         <input type="hidden" name="has_played_in_college" id="hasPlayedHidden" value="<?= $hpic_persisted ? (int)$hpic : '' ?>">
                         <div class="form-group" data-required-group>
                             <label>Have you played any sports representing this college? <span class="req-star" aria-hidden="true">*</span></label>
-                            <div class="yesno-group" role="radiogroup" aria-label="Have you played any sports representing this college?" aria-required="true">
+                            <div class="yesno-group" id="mainPlayedGroup" role="radiogroup" aria-label="Have you played any sports representing this college?" aria-required="true">
                                 <label class="yesno-opt <?= (int)$hpic === 1 ? 'selected' : '' ?>" data-val="1">
                                     <input type="radio" name="has_played_in_college_radio" value="1" <?= (int)$hpic === 1 ? 'checked' : '' ?>>
                                     <span class="yesno-circle"></span>
@@ -891,13 +1346,43 @@ $wizard_steps = [
                                 </label>
                             </div>
                             <div class="hint yesno-error" id="yesnoError" style="display:none;color:#c53030;font-weight:600">Please choose Yes or No before continuing.</div>
-                            <div class="hint">If yes, list the events, tournaments, or selections you've taken part in.</div>
+                            <div class="hint">If yes, tell us the tournament levels you've taken part in below.</div>
                         </div>
                         <div class="form-group" id="historyGroup" style="<?= (int)$hpic === 1 ? '' : 'display:none' ?>">
-                            <label for="sports_history">Games Played / Sports History</label>
-                            <textarea id="sports_history" name="sports_history" rows="6"
-                                      placeholder="e.g.&#10;2023 — Inter-college Cricket (Runner-up)&#10;2024 — University Football selection&#10;2025 — State-level Athletics (Bronze)"><?= h($student['sports_history'] ?? '') ?></textarea>
-                            <div class="hint">One entry per line. The Faculty of Sports can edit or extend this later.</div>
+                            <label>Levels of Participation</label>
+                            <?php foreach (participation_levels() as $lvl):
+                                $lvlVal = $student[$lvl['played_col']] ?? null;
+                                $lvlPersisted = ($lvlVal === 0 || $lvlVal === 1);
+                                if ($lvlVal === null) $lvlVal = 0;
+                            ?>
+                            <div class="participation-level" data-level="<?= h($lvl['slug']) ?>">
+                                <input type="hidden" name="<?= h($lvl['slug']) ?>_played" id="<?= h($lvl['slug']) ?>PlayedHidden" value="<?= $lvlPersisted ? (int)$lvlVal : '' ?>">
+                                <span class="participation-level-label"><?= h($lvl['label']) ?></span>
+                                <div class="form-group" style="margin-bottom:0">
+                                    <div class="yesno-group yesno-group--sm" role="radiogroup" aria-label="<?= h($lvl['label']) ?> participation" data-level-group="<?= h($lvl['slug']) ?>">
+                                        <label class="yesno-opt <?= (int)$lvlVal === 1 ? 'selected' : '' ?>" data-val="1">
+                                            <input type="radio" name="<?= h($lvl['slug']) ?>_played_radio" value="1" <?= (int)$lvlVal === 1 ? 'checked' : '' ?>>
+                                            <span class="yesno-circle"></span>
+                                            <span class="yesno-text">Yes</span>
+                                        </label>
+                                        <label class="yesno-opt <?= (int)$lvlVal === 0 ? 'selected' : '' ?>" data-val="0">
+                                            <input type="radio" name="<?= h($lvl['slug']) ?>_played_radio" value="0" <?= (int)$lvlVal === 0 ? 'checked' : '' ?>>
+                                            <span class="yesno-circle"></span>
+                                            <span class="yesno-text">No</span>
+                                        </label>
+                                    </div>
+                                    <div class="hint yesno-error" id="<?= h($lvl['slug']) ?>Error" style="display:none;color:#c53030;font-weight:600">Please choose Yes or No.</div>
+                                    <div class="form-group" id="<?= h($lvl['slug']) ?>YearGroup" style="margin:.6rem 0 0; <?= (int)$lvlVal === 1 ? '' : 'display:none' ?>">
+                                        <label for="<?= h($lvl['slug']) ?>_year">Please mention year of participation
+                                            <span style="text-transform:none;letter-spacing:normal;font-weight:400;color:var(--medium-gray)">(for more than one year, separate with commas &mdash; e.g. 2024, 2025)</span>
+                                        </label>
+                                        <input type="text" id="<?= h($lvl['slug']) ?>_year" name="<?= h($lvl['slug']) ?>_year" maxlength="100"
+                                               placeholder="e.g. 2024, 2025"
+                                               value="<?= h((string)($student[$lvl['year_col']] ?? '')) ?>">
+                                    </div>
+                                </div>
+                            </div>
+                            <?php endforeach; ?>
                         </div>
                         <div style="margin-top:1.4rem; display:flex; gap:.7rem; align-items:center; flex-wrap:wrap">
                             <a href="student-dashboard.php?step=3" class="btn-cancel btn-back"><i class="bi bi-arrow-left"></i> Back</a>
@@ -908,12 +1393,12 @@ $wizard_steps = [
                     (function () {
                         var form    = document.getElementById('playedForm');
                         if (!form) return;
-                        var opts    = form.querySelectorAll('.yesno-opt');
+                        var mainGroupEl = document.getElementById('mainPlayedGroup');
+                        var opts    = mainGroupEl.querySelectorAll('.yesno-opt');
                         var group   = form.querySelector('#historyGroup');
                         var hidden  = form.querySelector('#hasPlayedHidden');
-                        var ta      = form.querySelector('#sports_history');
                         var errBox  = form.querySelector('#yesnoError');
-                        var radios  = form.querySelectorAll('input[name="has_played_in_college_radio"]');
+                        var radios  = mainGroupEl.querySelectorAll('input[name="has_played_in_college_radio"]');
                         function getChosen() {
                             for (var i = 0; i < radios.length; i++) {
                                 if (radios[i].checked) return radios[i].value;
@@ -931,14 +1416,7 @@ $wizard_steps = [
                                 o.classList.toggle('selected', o.getAttribute('data-val') === chosen);
                             });
                             if (errBox) errBox.style.display = 'none';
-                            if (chosen === '1') {
-                                group.style.display = '';
-                                ta.setAttribute('required', 'required');
-                            } else {
-                                group.style.display = 'none';
-                                ta.removeAttribute('required');
-                                ta.value = '';
-                            }
+                            group.style.display = (chosen === '1') ? '' : 'none';
                         }
                         opts.forEach(function (o) {
                             o.addEventListener('click', function (e) {
@@ -947,23 +1425,80 @@ $wizard_steps = [
                                 sync();
                             });
                         });
-                        // Block submit until a choice is made.
+
+                        // --- Per-level Yes/No + Year sub-questions ------------------
+                        var levels = <?= json_encode(array_column(participation_levels(), 'slug')) ?>;
+                        var levelState = {};
+                        levels.forEach(function (slug) {
+                            var groupEl  = form.querySelector('[data-level-group="' + slug + '"]');
+                            var subOpts  = groupEl.querySelectorAll('.yesno-opt');
+                            var subRadios = groupEl.querySelectorAll('input[type=radio]');
+                            var subHidden = document.getElementById(slug + 'PlayedHidden');
+                            var yearGroup = document.getElementById(slug + 'YearGroup');
+                            var yearInput = document.getElementById(slug + '_year');
+                            var subErr    = document.getElementById(slug + 'Error');
+                            function getSubChosen() {
+                                for (var i = 0; i < subRadios.length; i++) {
+                                    if (subRadios[i].checked) return subRadios[i].value;
+                                }
+                                return null;
+                            }
+                            function syncSub() {
+                                var chosen = getSubChosen();
+                                if (chosen === null) return;
+                                subHidden.value = chosen;
+                                subOpts.forEach(function (o) {
+                                    o.classList.toggle('selected', o.getAttribute('data-val') === chosen);
+                                });
+                                if (subErr) subErr.style.display = 'none';
+                                if (chosen === '1') {
+                                    yearGroup.style.display = '';
+                                } else {
+                                    yearGroup.style.display = 'none';
+                                    yearInput.value = '';
+                                }
+                            }
+                            subOpts.forEach(function (o) {
+                                o.addEventListener('click', function () {
+                                    var r = o.querySelector('input[type=radio]');
+                                    r.checked = true;
+                                    syncSub();
+                                });
+                            });
+                            levelState[slug] = { getChosen: getSubChosen, errBox: subErr, groupEl: groupEl };
+                            syncSub();
+                        });
+
+                        // Block submit until the main choice — and, if Yes, every
+                        // per-level choice — has been made.
                         form.addEventListener('submit', function (e) {
+                            var blocked = false;
                             if (getChosen() === null) {
-                                e.preventDefault();
+                                blocked = true;
                                 if (errBox) {
                                     errBox.style.display = '';
                                     errBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
                                 }
-                                // Briefly pulse the pill group to draw the eye.
-                                form.querySelector('.yesno-group').style.boxShadow = '0 0 0 3px rgba(197,48,48,.25)';
-                                setTimeout(function () {
-                                    form.querySelector('.yesno-group').style.boxShadow = '';
-                                }, 1500);
+                                mainGroupEl.style.boxShadow = '0 0 0 3px rgba(197,48,48,.25)';
+                                setTimeout(function () { mainGroupEl.style.boxShadow = ''; }, 1500);
+                            } else if (getChosen() === '1') {
+                                levels.forEach(function (slug) {
+                                    var st = levelState[slug];
+                                    if (st.getChosen() === null) {
+                                        blocked = true;
+                                        if (st.errBox) st.errBox.style.display = '';
+                                        st.groupEl.style.boxShadow = '0 0 0 3px rgba(197,48,48,.25)';
+                                        setTimeout(function (el) {
+                                            return function () { el.style.boxShadow = ''; };
+                                        }(st.groupEl), 1500);
+                                    }
+                                });
                             }
+                            if (blocked) e.preventDefault();
                         });
-                        // Initial state — if column was NULL and there's no history,
-                        // show the textarea off but don't pre-check a radio.
+
+                        // Initial state — if column was NULL, show the level
+                        // group off but don't pre-check the main radio.
                         sync();
                     })();
                     </script>
@@ -1019,18 +1554,31 @@ $wizard_steps = [
                             $rowMimes = array_values(array_filter(array_map('trim', explode(',', (string)($doc['allowed_mime_types'] ?? 'application/pdf')))));
                             $isPhoto  = in_array('image/jpeg', $rowMimes, true) && !in_array('application/pdf', $rowMimes, true);
                             $acceptAttr = $isPhoto ? 'image/jpeg,.jpg,.jpeg' : 'application/pdf,.pdf';
+                            $isBankPassbook = strcasecmp(trim((string)$doc['document_name']), 'Bank passbook') === 0;
                         ?>
                             <div class="doc-card <?= $uploaded ? 'uploaded' : '' ?>" id="doc-<?= $req_id ?>">
                                 <div class="doc-head">
-                                    <div class="doc-title">
-                                        <i class="bi bi-file-earmark-<?= $uploaded ? 'check' : 'arrow-up' ?>"></i>
-                                        <?= h($doc['document_name']) ?>
-                                        <?php if ($requiredFlag): ?>
-                                            <span class="badge-required">REQUIRED</span>
-                                        <?php endif; ?>
+                                    <div class="doc-head-main">
                                         <?php if ($uploaded): ?>
-                                            <span class="badge-ok"><i class="bi bi-check-circle"></i> Uploaded</span>
+                                            <a class="doc-thumb" href="<?= h(url((string)$doc['file_path'])) ?>" target="_blank" rel="noopener" title="View <?= h($doc['document_name']) ?>">
+                                                <?php if ($isPhoto): ?>
+                                                    <img src="<?= h(url((string)$doc['file_path'])) ?>" alt="">
+                                                <?php else: ?>
+                                                    <i class="bi bi-file-earmark-pdf pdf-thumb-fallback"></i>
+                                                    <canvas class="pdf-thumb-canvas" data-pdf-url="<?= h(url((string)$doc['file_path'])) ?>" style="display:none"></canvas>
+                                                <?php endif; ?>
+                                            </a>
                                         <?php endif; ?>
+                                        <div class="doc-title">
+                                            <i class="bi bi-file-earmark-<?= $uploaded ? 'check' : 'arrow-up' ?>"></i>
+                                            <?= h($doc['document_name']) ?>
+                                            <?php if ($requiredFlag): ?>
+                                                <span class="badge-required">REQUIRED</span>
+                                            <?php endif; ?>
+                                            <?php if ($uploaded): ?>
+                                                <span class="badge-ok"><i class="bi bi-check-circle"></i> Uploaded</span>
+                                            <?php endif; ?>
+                                        </div>
                                     </div>
                                     <div class="doc-actions">
                                         <?php if ($uploaded): ?>
@@ -1055,6 +1603,47 @@ $wizard_steps = [
                                         No file uploaded yet.
                                     <?php endif; ?>
                                 </div>
+                                <?php if ($isBankPassbook): ?>
+                                <div class="bank-details" id="bankDetails">
+                                    <div class="bank-details-title"><i class="bi bi-bank"></i> Bank account details</div>
+                                    <div class="bank-grid">
+                                        <div class="form-group">
+                                            <label for="bank_account_number">Account Number *</label>
+                                            <input type="text" id="bank_account_number" name="bank_account_number" maxlength="30"
+                                                   inputmode="numeric" autocomplete="off"
+                                                   value="<?= h((string)($student['bank_account_number'] ?? '')) ?>">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="bank_account_number_confirm">Confirm Account Number *</label>
+                                            <input type="text" id="bank_account_number_confirm" name="bank_account_number_confirm" maxlength="30"
+                                                   inputmode="numeric" autocomplete="off" onpaste="return false"
+                                                   aria-describedby="bankConfirmError"
+                                                   value="<?= h((string)($student['bank_account_number'] ?? '')) ?>">
+                                            <div class="bank-field-error" id="bankConfirmError" role="alert" aria-live="polite"></div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="bank_name">Name of Bank *</label>
+                                            <input type="text" id="bank_name" name="bank_name" maxlength="120" autocomplete="off"
+                                                   value="<?= h((string)($student['bank_name'] ?? '')) ?>">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="bank_branch">Name of Branch *</label>
+                                            <input type="text" id="bank_branch" name="bank_branch" maxlength="120" autocomplete="off"
+                                                   value="<?= h((string)($student['bank_branch'] ?? '')) ?>">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="bank_ifsc">IFSC Code *</label>
+                                            <input type="text" id="bank_ifsc" name="bank_ifsc" maxlength="11" autocomplete="off"
+                                                   placeholder="e.g. SBIN0001234"
+                                                   value="<?= h((string)($student['bank_ifsc'] ?? '')) ?>">
+                                        </div>
+                                    </div>
+                                    <div class="bank-details-actions">
+                                        <button type="button" class="btn-save" id="bankDetailsSave"><i class="bi bi-check-circle"></i> Save bank details</button>
+                                        <span class="bank-details-status" id="bankDetailsStatus"></span>
+                                    </div>
+                                </div>
+                                <?php endif; ?>
                             </div>
                         <?php endforeach; ?>
                         </div>
@@ -1089,116 +1678,172 @@ $wizard_steps = [
                         };
                     ?>
 
-                    <table class="preview-table">
-                        <tr class="section-row">
-                            <td colspan="2">Personal Information
-                                <span class="preview-edit"><a href="student-dashboard.php?step=1">Edit</a></span>
-                            </td>
-                        </tr>
-                        <tr><td class="k">Full Name</td><td class="v"><?= h($student['full_name'] ?? '') ?></td></tr>
-                        <tr><td class="k">Date of Birth</td><td class="v"><?= $yes((string)($student['dob'] ?? '')) ?></td></tr>
-                        <tr><td class="k">Gender</td><td class="v"><?= $yes((string)($student['gender'] ?? '')) ?></td></tr>
-                        <tr><td class="k">Blood Group</td><td class="v"><?= $yes((string)($student['blood_group'] ?? '')) ?></td></tr>
-                        <?php if ($uses_father_first_name): ?>
-                            <tr><td class="k">Father's First Name</td><td class="v"><?= $yes((string)($student['mother_name'] ?? '')) ?></td></tr>
-                        <?php elseif ($is_pharm_faculty_department): ?>
-                            <tr><td class="k">Mother Name</td><td class="v"><?= $yes((string)($student['mother_name'] ?? '')) ?></td></tr>
-                        <?php endif; ?>
-                        <tr><td class="k">Email</td><td class="v"><?= $yes((string)($student['email'] ?? '')) ?></td></tr>
-                        <tr><td class="k">Mobile</td><td class="v"><?= $yes((string)($student['mobile'] ?? '')) ?></td></tr>
-                        <tr><td class="k">Address</td><td class="v"><?= $yes((string)($student['address'] ?? '')) ?></td></tr>
-                        <?php if (!empty($student['photo_path'])): ?>
-                            <tr><td class="k">Photo</td><td class="v"><a href="<?= h(url((string)$student['photo_path'])) ?>" target="_blank" rel="noopener">View</a></td></tr>
-                        <?php endif; ?>
+                    <div class="preview-summary">
 
-                        <tr class="section-row">
-                            <td colspan="2">Academic Details
-                                <span class="preview-edit"><a href="student-dashboard.php?step=2">Edit</a></span>
-                            </td>
-                        </tr>
-                        <tr><td class="k">Faculty</td><td class="v"><?= h($student['dept_name']) ?></td></tr>
-                        <tr><td class="k">Enrollment No.</td><td class="v"><?= $yes((string)($student['enrollment_no'] ?? '')) ?></td></tr>
-                        <?php if ($stores_roll_no): ?>
-                            <tr><td class="k">Roll No.</td><td class="v"><?= $yes((string)($student['roll_no'] ?? '')) ?></td></tr>
-                        <?php endif; ?>
-                        <tr><td class="k">Program / Branch</td><td class="v"><?= $yes((string)($student['program'] ?? '')) ?></td></tr>
-                        <tr><td class="k">Academic Year</td><td class="v"><?= $yes((string)($student['academic_year'] ?? '')) ?></td></tr>
-                        <tr><td class="k">Year of Study</td><td class="v"><?= $yes((string)($student['study_year'] ?? '')) ?></td></tr>
-
-                        <tr class="section-row">
-                            <td colspan="2">Sports Information
-                                <span class="preview-edit"><a href="student-dashboard.php?step=3">Edit</a></span>
-                            </td>
-                        </tr>
-                        <?php if ($uses_game_picker): ?>
-                            <?php
-                                // Build a code -> display_name lookup for preview chips.
-                                $game_name_by_code = [];
-                                foreach ($game_catalog as $g) {
-                                    $game_name_by_code[(string)$g['game_code']] = (string)$g['display_name'];
-                                }
-                            ?>
-                            <tr>
-                                <td class="k">Enrolled Games</td>
-                                <td class="v">
-                                    <?php if (!empty($selected_games)): ?>
-                                        <?php foreach ($selected_games as $code): ?>
-                                            <span class="game-chip">
-                                                <i class="<?= h(game_icon_for((string)$code)) ?>"></i>
-                                                <?= h($game_name_by_code[(string)$code] ?? $code) ?>
-                                            </span>
-                                        <?php endforeach; ?>
-                                    <?php else: ?>
-                                        <em class="empty">No games selected yet.</em>
-                                    <?php endif; ?>
-                                </td>
-                            </tr>
-                        <?php else: ?>
-                            <tr><td class="k">Primary Sport</td><td class="v"><?= $yes((string)($student['sport_1'] ?? '')) ?></td></tr>
-                            <tr><td class="k">Secondary Sport</td><td class="v"><?= $yes((string)($student['sport_2'] ?? '')) ?></td></tr>
-                        <?php endif; ?>
-                        <?php if (!empty($student['achievements'])): ?>
-                            <tr><td class="k">Achievements</td><td class="v"><?= nl2br(h((string)$student['achievements'])) ?></td></tr>
-                        <?php endif; ?>
-
-                        <tr class="section-row">
-                            <td colspan="2">Played History
-                                <span class="preview-edit"><a href="student-dashboard.php?step=4">Edit</a></span>
-                            </td>
-                        </tr>
-                        <?php
-                            $hpic_val = $student['has_played_in_college'] ?? null;
-                            if ($hpic_val === null) {
-                                $hpic_val = !empty($student['sports_history']) ? 1 : 0;
-                            }
-                        ?>
-                        <tr><td class="k">Played in this college?</td>
-                            <td class="v">
-                                <?php if ((int)$hpic_val === 1): ?>
-                                    <span class="badge-ok"><i class="bi bi-check-circle"></i> Yes</span>
-                                <?php else: ?>
-                                    <em class="empty">No</em>
+                        <div class="preview-card">
+                            <div class="preview-card-head">
+                                <div class="preview-card-title"><span class="preview-card-icon"><i class="bi bi-person-vcard"></i></span> Personal Information</div>
+                                <a class="preview-edit-link" href="student-dashboard.php?step=1"><i class="bi bi-pencil"></i> Edit</a>
+                            </div>
+                            <div class="preview-grid">
+                                <div class="preview-field"><span class="preview-field-label">Full Name</span><span class="preview-field-value"><?= h($student['full_name'] ?? '') ?></span></div>
+                                <div class="preview-field"><span class="preview-field-label">Date of Birth</span><span class="preview-field-value"><?= $yes((string)($student['dob'] ?? '')) ?></span></div>
+                                <div class="preview-field"><span class="preview-field-label">Aadhar Number</span><span class="preview-field-value"><?= $yes((string)($student['aadhar_number'] ?? '')) ?></span></div>
+                                <div class="preview-field"><span class="preview-field-label">Gender</span><span class="preview-field-value"><?= $yes((string)($student['gender'] ?? '')) ?></span></div>
+                                <div class="preview-field"><span class="preview-field-label">Blood Group</span><span class="preview-field-value"><?= $yes((string)($student['blood_group'] ?? '')) ?></span></div>
+                                <?php if ($uses_father_first_name): ?>
+                                    <div class="preview-field"><span class="preview-field-label">Father's First Name</span><span class="preview-field-value"><?= $yes((string)($student['father_name'] ?? '')) ?></span></div>
                                 <?php endif; ?>
-                            </td>
-                        </tr>
-                        <tr><td class="k">Games Played</td><td class="v"><?= !empty($student['sports_history']) ? nl2br(h((string)$student['sports_history'])) : '<em class="empty">—</em>' ?></td></tr>
+                                <?php if ($shows_mother_name_field): ?>
+                                    <div class="preview-field"><span class="preview-field-label">Mother's Name</span><span class="preview-field-value"><?= $yes((string)($student['mother_name'] ?? '')) ?></span></div>
+                                <?php endif; ?>
+                                <div class="preview-field"><span class="preview-field-label">Email</span><span class="preview-field-value"><?= $yes((string)($student['email'] ?? '')) ?></span></div>
+                                <div class="preview-field"><span class="preview-field-label">Mobile</span><span class="preview-field-value"><?= $yes((string)($student['mobile'] ?? '')) ?></span></div>
+                                <div class="preview-field"><span class="preview-field-label">WhatsApp No.</span><span class="preview-field-value"><?= $yes((string)($student['whatsapp_no'] ?? '')) ?></span></div>
+                                <div class="preview-field"><span class="preview-field-label">Permanent Address</span><span class="preview-field-value"><?= $yes((string)($student['permanent_address'] ?? '')) ?></span></div>
+                                <div class="preview-field"><span class="preview-field-label">Current Address</span><span class="preview-field-value"><?= $yes((string)($student['current_address'] ?? '')) ?></span></div>
+                                <?php if (!empty($student['photo_path'])): ?>
+                                    <div class="preview-field"><span class="preview-field-label">Photo</span><span class="preview-field-value"><a href="<?= h(url((string)$student['photo_path'])) ?>" target="_blank" rel="noopener">View <i class="bi bi-box-arrow-up-right"></i></a></span></div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
 
-                        <tr class="section-row">
-                            <td colspan="2">Documents
-                                <span class="preview-edit"><a href="student-dashboard.php?step=5">Edit</a></span>
-                            </td>
-                        </tr>
-                        <?php if (!$documents): ?>
-                            <tr><td colspan="2"><em class="empty">No documents required for your department.</em></td></tr>
-                        <?php else: ?>
-                            <?php foreach ($documents as $doc): ?>
-                                <tr>
-                                    <td class="k"><?= h($doc['document_name']) ?><?= (int)($doc['is_required'] ?? 0) === 1 ? ' *' : '' ?></td>
-                                    <td class="v"><?= $fmt_doc($doc) ?> <?= $reqDocBadge($doc) ?></td>
-                                </tr>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </table>
+                        <div class="preview-card">
+                            <div class="preview-card-head">
+                                <div class="preview-card-title"><span class="preview-card-icon"><i class="bi bi-mortarboard"></i></span> Academic Details</div>
+                                <a class="preview-edit-link" href="student-dashboard.php?step=2"><i class="bi bi-pencil"></i> Edit</a>
+                            </div>
+                            <div class="preview-grid">
+                                <div class="preview-field"><span class="preview-field-label">Faculty</span><span class="preview-field-value"><?= h($student['dept_name']) ?></span></div>
+                                <div class="preview-field"><span class="preview-field-label">PRN/Enrollment No.</span><span class="preview-field-value"><?= $yes((string)($student['enrollment_no'] ?? '')) ?></span></div>
+                                <?php if ($stores_roll_no): ?>
+                                    <div class="preview-field"><span class="preview-field-label">Roll No.</span><span class="preview-field-value"><?= $yes((string)($student['roll_no'] ?? '')) ?></span></div>
+                                <?php endif; ?>
+                                <div class="preview-field"><span class="preview-field-label">Program</span><span class="preview-field-value"><?= $yes((string)($student['program'] ?? '')) ?></span></div>
+                                <?php if ($needs_course_duration): ?>
+                                    <div class="preview-field"><span class="preview-field-label">Duration of Course</span><span class="preview-field-value"><?= $yes((string)($student['course_duration_years'] ?? '')) ?></span></div>
+                                <?php endif; ?>
+                                <div class="preview-field"><span class="preview-field-label">Department / Branch</span><span class="preview-field-value"><?= $yes((string)($student['department_name'] ?? '')) ?></span></div>
+                                <div class="preview-field"><span class="preview-field-label">Current Year in which studying</span><span class="preview-field-value"><?= $yes((string)($student['study_year'] ?? '')) ?></span></div>
+                                <div class="preview-field"><span class="preview-field-label">SSC Passing Year</span><span class="preview-field-value"><?= $yes((string)($student['ssc_passing_year'] ?? '')) ?></span></div>
+                                <div class="preview-field"><span class="preview-field-label">HSC Passing Year</span><span class="preview-field-value"><?= $yes((string)($student['hsc_passing_year'] ?? '')) ?></span></div>
+                                <div class="preview-field"><span class="preview-field-label">Diploma Passing Year</span><span class="preview-field-value"><?= $yes((string)($student['diploma_passing_year'] ?? '')) ?></span></div>
+                                <div class="preview-field"><span class="preview-field-label">First Admission to University / College</span><span class="preview-field-value"><?= $yes((string)($student['first_admission_university_year'] ?? '')) ?></span></div>
+                                <div class="preview-field"><span class="preview-field-label">First Admission to Present Course</span><span class="preview-field-value"><?= $yes((string)($student['first_admission_course_year'] ?? '')) ?></span></div>
+                                <div class="preview-field"><span class="preview-field-label">First Admission to Present Class</span><span class="preview-field-value"><?= $yes((string)($student['first_admission_class_year'] ?? '')) ?></span></div>
+                                <?php $gapYearVal = $student['has_gap_year'] ?? null; ?>
+                                <div class="preview-field"><span class="preview-field-label">Gap / Year Drop</span><span class="preview-field-value"><?= $gapYearVal === null ? '<em class="empty">—</em>' : ((int)$gapYearVal === 1 ? 'Yes' : 'No') ?></span></div>
+                                <?php if ((int)($gapYearVal ?? 0) === 1): ?>
+                                    <div class="preview-field"><span class="preview-field-label">Please Mention Year</span><span class="preview-field-value"><?= $yes((string)($student['gap_year_detail'] ?? '')) ?></span></div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+
+                        <div class="preview-card">
+                            <div class="preview-card-head">
+                                <div class="preview-card-title"><span class="preview-card-icon"><i class="bi bi-trophy"></i></span> Sports Information</div>
+                                <a class="preview-edit-link" href="student-dashboard.php?step=3"><i class="bi bi-pencil"></i> Edit</a>
+                            </div>
+                            <div class="preview-grid">
+                                <?php if ($uses_game_picker): ?>
+                                    <?php
+                                        // Build a code -> display_name lookup for preview chips.
+                                        $game_name_by_code = [];
+                                        foreach ($game_catalog as $g) {
+                                            $game_name_by_code[(string)$g['game_code']] = (string)$g['display_name'];
+                                        }
+                                    ?>
+                                    <div class="preview-field preview-field--full">
+                                        <span class="preview-field-label">Enrolled Games</span>
+                                        <span class="preview-field-value">
+                                            <?php if (!empty($selected_games)): ?>
+                                                <?php foreach ($selected_games as $code): ?>
+                                                    <span class="game-chip">
+                                                        <i class="<?= h(game_icon_for((string)$code)) ?>"></i>
+                                                        <?= h($game_name_by_code[(string)$code] ?? $code) ?>
+                                                    </span>
+                                                <?php endforeach; ?>
+                                            <?php else: ?>
+                                                <em class="empty">No games selected yet.</em>
+                                            <?php endif; ?>
+                                        </span>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="preview-field"><span class="preview-field-label">Primary Sport</span><span class="preview-field-value"><?= $yes((string)($student['sport_1'] ?? '')) ?></span></div>
+                                    <div class="preview-field"><span class="preview-field-label">Secondary Sport</span><span class="preview-field-value"><?= $yes((string)($student['sport_2'] ?? '')) ?></span></div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+
+                        <div class="preview-card">
+                            <div class="preview-card-head">
+                                <div class="preview-card-title"><span class="preview-card-icon"><i class="bi bi-clock-history"></i></span> Played History</div>
+                                <a class="preview-edit-link" href="student-dashboard.php?step=4"><i class="bi bi-pencil"></i> Edit</a>
+                            </div>
+                            <div class="preview-grid">
+                                <?php
+                                    $hpic_val = $student['has_played_in_college'] ?? null;
+                                    if ($hpic_val === null) {
+                                        $hpic_val = !empty($student['sports_history']) ? 1 : 0;
+                                    }
+                                ?>
+                                <div class="preview-field">
+                                    <span class="preview-field-label">Played in this college?</span>
+                                    <span class="preview-field-value">
+                                        <?php if ((int)$hpic_val === 1): ?>
+                                            <span class="badge-ok"><i class="bi bi-check-circle"></i> Yes</span>
+                                        <?php else: ?>
+                                            <em class="empty">No</em>
+                                        <?php endif; ?>
+                                    </span>
+                                </div>
+                                <?php if ((int)$hpic_val === 1): foreach (participation_levels() as $lvl):
+                                    $lvlVal = $student[$lvl['played_col']] ?? null;
+                                ?>
+                                <div class="preview-field">
+                                    <span class="preview-field-label"><?= h($lvl['label']) ?></span>
+                                    <span class="preview-field-value">
+                                        <?php if ((int)$lvlVal === 1): ?>
+                                            <span class="badge-ok"><i class="bi bi-check-circle"></i> Yes<?= !empty($student[$lvl['year_col']]) ? ' — ' . h((string)$student[$lvl['year_col']]) : '' ?></span>
+                                        <?php else: ?>
+                                            <em class="empty">No</em>
+                                        <?php endif; ?>
+                                    </span>
+                                </div>
+                                <?php endforeach; endif; ?>
+                            </div>
+                        </div>
+
+                        <div class="preview-card">
+                            <div class="preview-card-head">
+                                <div class="preview-card-title"><span class="preview-card-icon"><i class="bi bi-file-earmark-text"></i></span> Documents</div>
+                                <a class="preview-edit-link" href="student-dashboard.php?step=5"><i class="bi bi-pencil"></i> Edit</a>
+                            </div>
+                            <?php if (!$documents): ?>
+                                <div class="preview-doc-list">
+                                    <div class="preview-doc-row"><em class="empty">No documents required for your department.</em></div>
+                                </div>
+                            <?php else: ?>
+                                <div class="preview-doc-list">
+                                    <?php foreach ($documents as $doc): ?>
+                                        <div class="preview-doc-row">
+                                            <span class="preview-doc-name"><?= h($doc['document_name']) ?><?= (int)($doc['is_required'] ?? 0) === 1 ? ' <span class="req-star">*</span>' : '' ?></span>
+                                            <span class="preview-doc-status"><?= $fmt_doc($doc) ?> <?= $reqDocBadge($doc) ?></span>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endif; ?>
+                            <?php if ($has_bank_passbook): ?>
+                                <div class="preview-grid" style="border-top:1px solid var(--light-gray)">
+                                    <div class="preview-field"><span class="preview-field-label">Account Number</span><span class="preview-field-value"><?= $yes((string)($student['bank_account_number'] ?? '')) ?></span></div>
+                                    <div class="preview-field"><span class="preview-field-label">Name of Bank</span><span class="preview-field-value"><?= $yes((string)($student['bank_name'] ?? '')) ?></span></div>
+                                    <div class="preview-field"><span class="preview-field-label">Name of Branch</span><span class="preview-field-value"><?= $yes((string)($student['bank_branch'] ?? '')) ?></span></div>
+                                    <div class="preview-field"><span class="preview-field-label">IFSC Code</span><span class="preview-field-value"><?= $yes((string)($student['bank_ifsc'] ?? '')) ?></span></div>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+
+                    </div>
 
                     <?php if ($required_total > 0 && $required_uploaded < $required_total): ?>
                         <div class="alert-banner warn" style="margin-top:1.2rem">
@@ -1224,8 +1869,7 @@ $wizard_steps = [
                 </div>
             <?php endif; ?>
         </div>
-
-        <!-- Achievements section removed — duplicate of the Sports Information step -->
+        <?php endif; ?>
     </div>
 
     <script>
@@ -1240,6 +1884,53 @@ $wizard_steps = [
                 var parts = [sn, fn, mn].map(function (s) { return s.trim(); }).filter(Boolean);
                 document.getElementById('full_name_field').value = parts.join(' ');
             });
+
+            /* "Same as Permanent Address" checkbox */
+            var sameCb    = document.getElementById('same_as_permanent');
+            var permInput = document.getElementById('permanent_address');
+            var curInput  = document.getElementById('current_address');
+            function syncCurrentAddress() {
+                if (!sameCb || !permInput || !curInput) return;
+                if (sameCb.checked) {
+                    curInput.value = permInput.value;
+                    curInput.readOnly = true;
+                } else {
+                    curInput.readOnly = false;
+                }
+            }
+            if (sameCb) {
+                syncCurrentAddress();
+                sameCb.addEventListener('change', syncCurrentAddress);
+                permInput.addEventListener('input', function () {
+                    if (sameCb.checked) curInput.value = permInput.value;
+                });
+            }
+
+            /* "WhatsApp number same as Mobile No." checkbox */
+            var waCb    = document.getElementById('same_as_mobile');
+            var mobInput = document.getElementById('mobile');
+            var waInput  = document.getElementById('whatsapp_no');
+            if (waCb && mobInput && waInput) {
+                /* On load: only lock the field if already ticked — never wipe a
+                   saved number that legitimately differs from the mobile no. */
+                if (waCb.checked) {
+                    waInput.value = mobInput.value;
+                    waInput.readOnly = true;
+                }
+                waCb.addEventListener('change', function () {
+                    if (waCb.checked) {
+                        waInput.value = mobInput.value;
+                        waInput.readOnly = true;
+                    } else {
+                        waInput.value = '';
+                        waInput.readOnly = false;
+                        waInput.focus();
+                    }
+                });
+                mobInput.addEventListener('input', function () {
+                    if (waCb.checked) waInput.value = mobInput.value;
+                });
+            }
         }
 
         /* Documents step (5) — per-file upload + delete via fetch */
@@ -1341,11 +2032,113 @@ $wizard_steps = [
             });
         });
 
-        /* ---------------- Game-picker (Step 3) max-4 enforcement ---------------- */
+        /* Bank account details (inside the "Bank passbook" doc-card) — fetch save */
+        var bankSave = document.getElementById('bankDetailsSave');
+        if (bankSave) {
+            var bankStatus = document.getElementById('bankDetailsStatus');
+            var bankVal = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; };
+            var bankFail = function (msg) { if (bankStatus) { bankStatus.textContent = msg; bankStatus.style.color = '#b91c1c'; } };
+
+            /* Live "confirm account number" match check — runs as the user types,
+               before Save. Returns true when the two fields agree. */
+            var accEl     = document.getElementById('bank_account_number');
+            var acc2El    = document.getElementById('bank_account_number_confirm');
+            var confirmErr = document.getElementById('bankConfirmError');
+            function checkAccountMatch() {
+                if (!accEl || !acc2El) return true;
+                var a = accEl.value.trim(), b = acc2El.value.trim();
+                if (b === '') {
+                    acc2El.classList.remove('mismatch', 'match-ok');
+                    if (confirmErr) confirmErr.textContent = '';
+                    return a === '';
+                }
+                if (a === b) {
+                    acc2El.classList.remove('mismatch');
+                    acc2El.classList.add('match-ok');
+                    if (confirmErr) confirmErr.textContent = '';
+                    return true;
+                }
+                acc2El.classList.add('mismatch');
+                acc2El.classList.remove('match-ok');
+                if (confirmErr) confirmErr.textContent = 'Account numbers do not match.';
+                return false;
+            }
+            if (accEl)  accEl.addEventListener('input', checkAccountMatch);
+            if (acc2El) acc2El.addEventListener('input', checkAccountMatch);
+
+            bankSave.addEventListener('click', function () {
+                var acc    = bankVal('bank_account_number');
+                var acc2   = bankVal('bank_account_number_confirm');
+                var bank   = bankVal('bank_name');
+                var branch = bankVal('bank_branch');
+                var ifsc   = bankVal('bank_ifsc').toUpperCase();
+                if (!acc || !acc2 || !bank || !branch || !ifsc) { bankFail('Please fill all five bank fields.'); return; }
+                if (!/^[0-9]{6,20}$/.test(acc)) { bankFail('Account number must be 6–20 digits.'); return; }
+                if (acc !== acc2) {
+                    checkAccountMatch();
+                    if (acc2El) acc2El.focus();
+                    bankFail('Account numbers do not match.');
+                    return;
+                }
+                if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) { bankFail('IFSC code format looks wrong (e.g. SBIN0001234).'); return; }
+                bankSave.disabled = true;
+                if (bankStatus) { bankStatus.textContent = 'Saving…'; bankStatus.style.color = ''; }
+                var fd = new FormData();
+                fd.append('_csrf', csrfValue);
+                fd.append('bank_details', '1');
+                fd.append('bank_account_number', acc);
+                fd.append('bank_account_number_confirm', acc2);
+                fd.append('bank_name', bank);
+                fd.append('bank_branch', branch);
+                fd.append('bank_ifsc', ifsc);
+                fetch('student_dashboard_process.php?step=5', { method: 'POST', body: fd, credentials: 'same-origin' })
+                    .then(function (r) { return r.json(); })
+                    .then(function (j) {
+                        bankSave.disabled = false;
+                        if (j && j.ok) {
+                            if (bankStatus) { bankStatus.textContent = 'Saved.'; bankStatus.style.color = '#198754'; }
+                            var ifscEl = document.getElementById('bank_ifsc');
+                            if (ifscEl) ifscEl.value = ifsc;
+                        } else {
+                            bankFail(j && j.message ? j.message : 'Save failed.');
+                        }
+                    })
+                    .catch(function () { bankSave.disabled = false; bankFail('Network error. Please try again.'); });
+            });
+        }
+
+        /* Render a real thumbnail of page 1 for each uploaded PDF (falls back to the icon if pdf.js can't load/render) */
+        var pdfCanvases = document.querySelectorAll('.pdf-thumb-canvas[data-pdf-url]');
+        if (pdfCanvases.length && window.pdfjsLib) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+            pdfCanvases.forEach(function (canvas) {
+                var url = canvas.getAttribute('data-pdf-url');
+                var thumbSize = canvas.parentElement.clientWidth || 56;
+                var dpr = window.devicePixelRatio || 1;
+                pdfjsLib.getDocument(url).promise
+                    .then(function (pdf) { return pdf.getPage(1); })
+                    .then(function (page) {
+                        var baseViewport = page.getViewport({ scale: 1 });
+                        var scale = (thumbSize * dpr) / Math.min(baseViewport.width, baseViewport.height);
+                        var viewport = page.getViewport({ scale: scale });
+                        canvas.width = viewport.width;
+                        canvas.height = viewport.height;
+                        var ctx = canvas.getContext('2d');
+                        return page.render({ canvasContext: ctx, viewport: viewport }).promise;
+                    })
+                    .then(function () {
+                        canvas.style.display = 'block';
+                        var fallback = canvas.parentElement.querySelector('.pdf-thumb-fallback');
+                        if (fallback) fallback.style.display = 'none';
+                    })
+                    .catch(function () { /* leave the fallback icon showing */ });
+            });
+        }
+
+        /* ---------------- Game-picker (Step 3) — no cap, at least 1 required ---------------- */
         var pickerForm = document.getElementById('gamePickerForm');
         if (pickerForm) {
-            // maxPicks = 4 by default; allow the server to override via data-max-picks on the form.
-            var maxPicks = parseInt(pickerForm.getAttribute('data-max-picks') || '4', 10) || 4;
+            var totalGames = parseInt(pickerForm.getAttribute('data-total-games') || '0', 10) || 0;
             var counterNum = document.getElementById('gameCountNum');
             var counter    = document.getElementById('gameCounter');
             var bar        = document.getElementById('gameBarFill');
@@ -1353,55 +2146,48 @@ $wizard_steps = [
             var submit     = document.getElementById('gamePickerSubmit');
 
             function refresh() {
-                var rows = pickerForm.querySelectorAll('.game-row');
                 var checked = pickerForm.querySelectorAll('.game-row.selected').length;
                 if (counterNum) counterNum.textContent = String(checked);
-                if (counter) counter.classList.toggle('complete', checked === maxPicks);
-                if (bar) bar.style.width = Math.min(100, Math.round(checked / maxPicks * 100)) + '%';
-                var limitReached = checked >= maxPicks;
-                rows.forEach(function (c) {
-                    var cb = c.querySelector('input[type=checkbox]');
-                    if (!cb) return;
-                    // Unchecked rows at the limit are disabled (can't pick a 5th).
-                    // Already-checked rows stay enabled so the user can uncheck them.
-                    var shouldDisable = limitReached && !cb.checked;
-                    cb.disabled = shouldDisable;
-                    c.classList.toggle('disabled', shouldDisable);
-                });
+                if (counter) counter.classList.toggle('complete', checked === totalGames && totalGames > 0);
+                if (bar) bar.style.width = Math.min(100, Math.round(checked / Math.max(1, totalGames) * 100)) + '%';
                 if (submit) submit.disabled = false;
             }
 
             pickerForm.querySelectorAll('.game-row').forEach(function (row) {
                 var cb = row.querySelector('input[type=checkbox]');
                 if (!cb) return;
-
-                // Single source of truth: the checkbox's change event.
-                // We DON'T block the click — we just let it toggle, and
-                // if the user tried to pick a 5th, we revert and show an error.
                 cb.addEventListener('change', function () {
-                    if (cb.checked) {
-                        var checkedNow = pickerForm.querySelectorAll('.game-row.selected').length;
-                        if (checkedNow > maxPicks) {
-                            // Revert this 5th pick.
-                            cb.checked = false;
-                            if (err) {
-                                err.textContent = 'You can only pick ' + maxPicks + ' games. Uncheck one first.';
-                                setTimeout(function () { err.textContent = ''; }, 2200);
-                            }
-                            return;
-                        }
-                    }
                     row.classList.toggle('selected', cb.checked);
                     refresh();
                 });
             });
 
+            /* Search / filter — hides non-matching rows; ticked rows stay
+               ticked and still submit even while hidden. */
+            var search = document.getElementById('gameSearch');
+            if (search) {
+                var emptyMsg = document.getElementById('gameListEmpty');
+                var searchRows = pickerForm.querySelectorAll('.game-row');
+                search.addEventListener('input', function () {
+                    var q = search.value.trim().toLowerCase();
+                    var shown = 0;
+                    searchRows.forEach(function (row) {
+                        var nameEl = row.querySelector('.game-name');
+                        var name = (nameEl ? nameEl.textContent : '').toLowerCase();
+                        var match = q === '' || name.indexOf(q) !== -1;
+                        row.classList.toggle('filtered-out', !match);
+                        if (match) shown++;
+                    });
+                    if (emptyMsg) emptyMsg.classList.toggle('show', shown === 0);
+                });
+            }
+
             pickerForm.addEventListener('submit', function (e) {
                 var checked = pickerForm.querySelectorAll('.game-row.selected').length;
-                if (checked !== maxPicks) {
+                if (checked < 1) {
                     e.preventDefault();
                     if (err) {
-                        err.textContent = 'Please select exactly ' + maxPicks + ' games before continuing.';
+                        err.textContent = 'Please select at least 1 game before continuing.';
                     }
                     var grid = document.getElementById('gameGrid');
                     if (grid) {

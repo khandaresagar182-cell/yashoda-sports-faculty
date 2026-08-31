@@ -93,6 +93,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $valid_user_id) {
         .login-card-footer{padding:1.25rem 2rem;background:var(--off-white);border-top:1px solid var(--light-gray);text-align:center}
         .back-link{font-size:.85rem;color:var(--medium-gray);text-decoration:none;display:inline-flex;align-items:center;gap:.4rem}
         .back-link:hover{color:var(--primary-navy)}
+        @media (max-width: 576px) {
+            .login-card { max-width: 95%; border-radius: 12px; }
+            .login-card-body { padding: 1.15rem 1.15rem 1rem; }
+            .login-card-footer { padding: 1rem 1.15rem; }
+            .login-card-header { padding: 1.1rem 1.2rem 1rem; }
+            .login-card-header h1 { font-size: 1.1rem; }
+            .login-icon { width: 46px; height: 46px; }
+            .input-wrapper input { padding: .7rem .7rem .7rem 2.5rem; font-size: .9rem; }
+            .btn-login { padding: .75rem; font-size: .9rem; }
+        }
     </style>
 </head>
 <body>

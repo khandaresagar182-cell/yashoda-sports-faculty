@@ -244,11 +244,11 @@ if ($f['role'] === 'FACULTY' && count($departments) === 1) {
             </div>
             <nav class="sidebar-nav">
                 <div class="sidebar-nav-label">Main</div>
-                <a href="#" onclick="alert('Pick a faculty first.'); return false;">
-                    <i class="bi bi-speedometer2"></i> <span>Dashboard</span>
-                </a>
                 <a href="#" class="active">
                     <i class="bi bi-building"></i> <span>Select Faculty</span>
+                </a>
+                <a href="#" onclick="alert('Pick a faculty first.'); return false;">
+                    <i class="bi bi-speedometer2"></i> <span>Dashboard</span>
                 </a>
                 <a href="#" onclick="alert('Pick a faculty first.'); return false;">
                     <i class="bi bi-search"></i> <span>Search Students</span>

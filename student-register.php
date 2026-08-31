@@ -42,8 +42,19 @@ if ($old) unset($_SESSION['_register_old']);
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <link rel="stylesheet" href="<?= h(url('css/public.css')) ?>">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 
     <style>
+        /* Date of Birth picker (flatpickr) — brand colors, quick year jump */
+        .flatpickr-calendar { border-radius: 10px; box-shadow: 0 12px 30px rgba(0,0,0,.18); }
+        .flatpickr-months .flatpickr-month, .flatpickr-current-month .flatpickr-monthDropdown-months,
+        .flatpickr-current-month input.cur-year { color: var(--primary-navy); fill: var(--primary-navy); }
+        .flatpickr-current-month input.cur-year { font-weight: 600; }
+        span.flatpickr-weekday { color: var(--primary-navy); font-weight: 600; }
+        .flatpickr-day.selected, .flatpickr-day.selected:hover { background: var(--primary-navy); border-color: var(--primary-navy); }
+        .flatpickr-day.today { border-color: var(--accent-gold); }
+        .flatpickr-day.today:hover { background: var(--accent-gold); border-color: var(--accent-gold); }
+        .flatpickr-day:hover { background: var(--off-white); }
         body { background: var(--primary-navy-dark); display:flex; flex-direction:column; min-height:100vh; }
         .register-page { flex:1; display:flex; align-items:center; justify-content:center; padding:2rem 1rem; position:relative; overflow:hidden; }
         .register-page::before { content:''; position:absolute; inset:-50%; background: radial-gradient(circle at 20% 50%, rgba(201,162,39,.08) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(114,47,55,.06) 0%, transparent 50%); animation: bgShift 15s ease-in-out infinite alternate; }
@@ -80,6 +91,23 @@ if ($old) unset($_SESSION['_register_old']);
         .login-footer a:hover { color:#fff; }
         .info-note { font-size:.78rem; color: var(--medium-gray); background: rgba(13,202,240,.06); border:1px solid rgba(13,202,240,.2); padding:.55rem .7rem; border-radius:6px; margin-top:.4rem; line-height:1.5; }
         .info-note i { color:#055160; margin-right:.3rem; }
+        @media (max-width: 576px) {
+            .register-card { max-width: 95%; border-radius: 12px; }
+            .register-card-header { padding: 1.1rem 1.2rem 1rem; }
+            .register-card-header h1 { font-size: 1.05rem; }
+            .register-card-header p { font-size: .72rem; }
+            .register-icon { width: 46px; height: 46px; }
+            .register-card-body { padding: 1.15rem 1.15rem 1rem; }
+            .register-card-footer { padding: .9rem 1.15rem; font-size: .82rem; }
+            .form-group input, .form-group select { padding: .6rem .7rem; font-size: .88rem; }
+            .btn-register { padding: .75rem; font-size: .9rem; }
+            .login-footer p { font-size: .75rem; }
+        }
+        @media (max-width: 480px) {
+            .register-card-body { padding: 1rem; }
+            .form-group label { font-size: .72rem; }
+            .form-group { margin-bottom: .7rem; }
+        }
     </style>
 </head>
 <body>
@@ -130,6 +158,14 @@ if ($old) unset($_SESSION['_register_old']);
                     </div>
 
                     <div class="form-group">
+                        <label for="mother_name">Mother Name *</label>
+                        <input type="text" id="mother_name" name="mother_name" required
+                               minlength="1" maxlength="100"
+                               placeholder="e.g. Sunita"
+                               value="<?= h($old['mother_name'] ?? '') ?>">
+                    </div>
+
+                    <div class="form-group">
                         <label for="gender">Gender *</label>
                         <select id="gender" name="gender" required>
                             <option value="">— Select —</option>
@@ -162,8 +198,8 @@ if ($old) unset($_SESSION['_register_old']);
                     <div class="form-row">
                         <div class="form-group">
                             <label for="dob">Date of Birth *</label>
-                            <input type="date" id="dob" name="dob" required
-                                   min="1990-01-01" max="<?= date('Y-m-d') ?>"
+                            <input type="text" id="dob" name="dob" required autocomplete="off"
+                                   placeholder="dd-mm-yyyy"
                                    value="<?= h($old['dob'] ?? '') ?>">
                             <div class="hint">Password = DOB in DDMMYYYY format.</div>
                         </div>
@@ -205,6 +241,17 @@ if ($old) unset($_SESSION['_register_old']);
     <footer class="login-footer">
         <p>&copy; 2026 <a href="index.php">YSPM's Yashoda Technical Campus, Satara</a>. All Rights Reserved.</p>
     </footer>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script>
+        flatpickr('#dob', {
+            dateFormat: 'Y-m-d',
+            altInput: true,
+            altFormat: 'd-m-Y',
+            minDate: '1995-01-01',
+            maxDate: 'today',
+            disableMobile: true
+        });
+    </script>
     <script>
         // Auto-combine the three name fields into the hidden `full_name`
         // field on submit so the server still receives a single value to

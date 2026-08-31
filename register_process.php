@@ -27,6 +27,7 @@ $first_name    = trim((string)($_POST['first_name']  ?? ''));
 $middle_name   = trim((string)($_POST['middle_name'] ?? ''));
 // Stored as "Surname First Middle" everywhere — DB, display, exports.
 $full_name     = trim(implode(' ', array_filter([$surname, $first_name, $middle_name])));
+$mother_name   = trim((string)($_POST['mother_name'] ?? ''));
 $email         = strtolower(trim((string)($_POST['email'] ?? '')));
 $mobile        = trim((string)($_POST['mobile'] ?? ''));
 $dob           = trim((string)($_POST['dob'] ?? ''));
@@ -46,6 +47,9 @@ if ($surname === '' || strlen($surname) > 60) {
 if (strlen($full_name) < 2 || strlen($full_name) > 160) {
     $errors[] = 'Please enter your full name (2-160 characters).';
 }
+if ($mother_name === '' || strlen($mother_name) > 100) {
+    $errors[] = 'Please enter your mother name (max 100 characters).';
+}
 if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 160) {
     $errors[] = 'Please enter a valid email address.';
 }
@@ -57,8 +61,8 @@ if ($gender === '' || !in_array($gender, gender_options(), true)) {
     $errors[] = 'Please select your gender.';
 }
 $dob_ts = strtotime($dob);
-if (!$dob_ts || $dob_ts > time() || $dob_ts < strtotime('1990-01-01')) {
-    $errors[] = 'Please enter a valid date of birth (1990 onwards, not in the future).';
+if (!$dob_ts || $dob_ts > time() || $dob_ts < strtotime('1995-01-01')) {
+    $errors[] = 'Please enter a valid date of birth (1995 onwards, not in the future).';
 }
 if ($department_id <= 0) {
     $errors[] = 'Please select your faculty.';
@@ -86,6 +90,7 @@ if ($errors) {
         'first_name'   => $first_name,
         'middle_name'  => $middle_name,
         'surname'      => $surname,
+        'mother_name'  => $mother_name,
         'gender'       => $gender,
         'email'        => $email,
         'mobile'       => $mobile,
@@ -110,12 +115,13 @@ $enrollment_no = null;
 try {
     $new_id = db_insert(
         'INSERT INTO students
-            (enrollment_no, full_name, dob, gender, email, mobile, department_id,
+            (enrollment_no, full_name, mother_name, dob, gender, email, mobile, department_id,
              password_hash, is_active, is_self_registered, registered_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,NOW())',
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,NOW())',
         [
             $enrollment_no,
             $full_name,
+            $mother_name,
             date('Y-m-d', $dob_ts),
             $gender,
             $email,
@@ -125,13 +131,26 @@ try {
             1,    // is_active
             1,    // is_self_registered
         ],
-        'sssssisii'
+        'sssssssisii'
     );
 } catch (Throwable $e) {
     error_log('[register] insert failed: ' . $e->getMessage());
-    flash_set('register_error', 'Could not create the account. Please try again.', 'error');
+    // Surface the real error to the user only when the env explicitly asks
+    // for it. Default keeps the generic message (don't leak DB internals).
+    // APP_DEBUG=1 in .user.ini on the live site lets you see the real
+    // failure while debugging without committing the leak to the codebase.
+    $showDebug = getenv('APP_DEBUG') === '1';
+    $msg = $showDebug
+        ? 'Could not create the account: ' . $e->getMessage()
+        : 'Could not create the account. Please try again.';
+    flash_set('register_error', $msg, 'error');
     redirect('student-register.php');
 }
+
+/* ---------------- email the credentials (best-effort) ---------------- */
+// Never let a broken/unconfigured mail server block registration — the
+// on-screen credentials screen below is the guaranteed fallback either way.
+$emailed = send_student_credentials_email($email, $full_name, $email, $plaintext_password);
 
 /* ---------------- stash credentials in a one-shot flash + redirect ---------------- */
 
@@ -139,6 +158,7 @@ $_SESSION['_new_account'] = [
     'email'    => $email,
     'password' => $plaintext_password,
     'name'     => $full_name,
+    'emailed'  => $emailed,
     // Show the credentials once and forget. This makes the page
     // non-refreshable: hitting refresh shows an error.
     'shown_at' => time(),

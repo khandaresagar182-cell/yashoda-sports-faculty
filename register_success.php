@@ -62,6 +62,22 @@ $expired = !$creds;
         .expired-box i { font-size:3rem; color: var(--medium-gray); margin-bottom:1rem; display:block; }
         .expired-box h2 { font-size:1.1rem; color: var(--primary-navy); margin-bottom:.5rem; }
         .expired-box p { color: var(--medium-gray); font-size:.9rem; margin-bottom:1.2rem; }
+        @media (max-width: 576px) {
+            .success-card { max-width: 95%; border-radius: 12px; }
+            .success-header { padding: 1.25rem 1.25rem 1.1rem; }
+            .success-header h1 { font-size: 1.1rem; }
+            .success-header p { font-size: 0.78rem; }
+            .success-icon { width: 50px; height: 50px; }
+            .success-icon i { font-size: 1.5rem; }
+            .success-body { padding: 1.15rem 1.15rem 1rem; }
+            .warning-box { font-size: 0.75rem; padding: 0.6rem 0.8rem; margin-bottom: 0.85rem; }
+            .cred-row { flex-direction: column; }
+            .cred-label { min-width: auto; border-right: none; border-bottom: 1px solid var(--light-gray); padding: .5rem .75rem; font-size: .72rem; }
+            .cred-value { font-size: .9rem; padding: .55rem .75rem; }
+            .btn-copy { padding: .55rem .75rem; min-width: auto; }
+            .btn-primary-action { padding: 0.75rem; font-size: 0.9rem; }
+            .login-footer p { font-size: 0.75rem; }
+        }
     </style>
 </head>
 <body>
@@ -81,6 +97,13 @@ $expired = !$creds;
                         This page will not show them again after a refresh.
                         You can change your password from your dashboard at any time.
                     </div>
+
+                    <?php if (!empty($creds['emailed'])): ?>
+                        <div class="warning-box" style="background: rgba(25,135,84,.1); border-color: rgba(25,135,84,.3); color:#0a3622">
+                            <i class="bi bi-envelope-check-fill" style="color:#198754"></i>
+                            A copy of these credentials was also emailed to <strong><?= h($creds['email']) ?></strong>.
+                        </div>
+                    <?php endif; ?>
 
                     <div class="cred-row">
                         <div class="cred-label"><i class="bi bi-person"></i> Username</div>
