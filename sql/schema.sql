@@ -40,6 +40,7 @@ CREATE TABLE `faculty` (
     `password_hash` VARCHAR(255) NOT NULL,
     `role`          ENUM('SUPER_ADMIN','FACULTY') NOT NULL DEFAULT 'FACULTY',
     `phone`         VARCHAR(20)  NULL,
+    `archive_email` VARCHAR(160) NULL,
     `is_active`     TINYINT(1)   NOT NULL DEFAULT 1,
     `must_reset_pw` TINYINT(1)   NOT NULL DEFAULT 0,
     `last_login_at` TIMESTAMP    NULL,
@@ -75,22 +76,51 @@ CREATE TABLE `students` (
     `roll_no`       VARCHAR(40)  NULL,
     `full_name`     VARCHAR(160) NOT NULL,
     `mother_name`   VARCHAR(160) NULL,
+    `father_name`   VARCHAR(160) NULL,
     `dob`           DATE         NULL,
+    `aadhar_number` VARCHAR(12)  NULL,
     `gender`        ENUM('Male','Female','Other') NULL,
     `blood_group`   ENUM('A+','A-','B+','B-','O+','O-','AB+','AB-') NULL,
     `email`         VARCHAR(160) NULL,
     `mobile`        VARCHAR(20)  NULL,
+    `whatsapp_no`   VARCHAR(20)  NULL,
     `parent_phone`  VARCHAR(20)  NULL,
     `address`       TEXT         NULL,
+    `permanent_address` VARCHAR(500) NULL,
+    `current_address`   VARCHAR(500) NULL,
     `department_id` TINYINT UNSIGNED NOT NULL,
     `program`       VARCHAR(120) NULL,
+    `department_name` VARCHAR(120) NULL,
     `academic_year` VARCHAR(10)  NULL,
     `study_year`    ENUM('First','Second','Third','Final') NULL,
+    `admission_year` VARCHAR(4)  NULL,
+    `ssc_passing_year` VARCHAR(4) NULL,
+    `hsc_passing_year` VARCHAR(4) NULL,
+    `diploma_passing_year` VARCHAR(4) NULL,
+    `first_admission_university_year` VARCHAR(4) NULL,
+    `first_admission_course_year`    VARCHAR(4) NULL,
+    `first_admission_class_year`     VARCHAR(4) NULL,
+    `has_gap_year`  TINYINT(1)   NULL DEFAULT NULL,
+    `gap_year_detail` VARCHAR(100) NULL,
+    `bank_account_number` VARCHAR(30)  NULL,
+    `bank_name`     VARCHAR(120) NULL,
+    `bank_branch`   VARCHAR(120) NULL,
+    `bank_ifsc`     VARCHAR(15)  NULL,
     `sport_1`       VARCHAR(80)  NULL,
     `sport_2`       VARCHAR(80)  NULL,
     `achievements`  TEXT         NULL,
     `sports_history` TEXT        NULL,
     `has_played_in_college` TINYINT(1) NULL DEFAULT NULL,
+    `zonal_played`  TINYINT(1)   NULL DEFAULT NULL,
+    `zonal_year`    VARCHAR(100) NULL,
+    `interzonal_played` TINYINT(1) NULL DEFAULT NULL,
+    `interzonal_year`   VARCHAR(100) NULL,
+    `all_india_played`  TINYINT(1) NULL DEFAULT NULL,
+    `all_india_year`    VARCHAR(100) NULL,
+    `west_zone_played` TINYINT(1)   NULL DEFAULT NULL,
+    `west_zone_year`   VARCHAR(100) NULL,
+    `krida_mahotsav_played` TINYINT(1)   NULL DEFAULT NULL,
+    `krida_mahotsav_year`   VARCHAR(100) NULL,
     `photo_path`    VARCHAR(255) NULL,
     `password_hash` VARCHAR(255) NULL,
     `is_active`     TINYINT(1)   NOT NULL DEFAULT 1,
@@ -272,6 +302,30 @@ CREATE TABLE `student_selected_games` (
     KEY `idx_ssg_game` (`game_code`),
     CONSTRAINT `fk_ssg_student` FOREIGN KEY (`student_id`)
         REFERENCES `students`(`id`) ON UPDATE CASCADE ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------
+-- 12b. eligibility_archive — server-side backup of every Word eligibility
+--      form generated from Final Teams. One row per generated file;
+--      timestamped versions are kept. See migration-v45.
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS `eligibility_archive`;
+CREATE TABLE `eligibility_archive` (
+    `id`            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `department_id` TINYINT UNSIGNED NOT NULL,
+    `academic_year` VARCHAR(10)  NOT NULL DEFAULT '',
+    `game_name`     VARCHAR(80)  NOT NULL,
+    `gender`        VARCHAR(10)  NULL,
+    `event_label`   VARCHAR(120) NOT NULL DEFAULT '',
+    `file_name`     VARCHAR(255) NOT NULL,
+    `file_path`     VARCHAR(255) NOT NULL,
+    `player_count`  SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    `created_by`    INT UNSIGNED NULL,
+    `created_at`    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_dept_year` (`department_id`, `academic_year`),
+    CONSTRAINT `fk_elig_archive_dept` FOREIGN KEY (`department_id`)
+        REFERENCES `departments`(`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ---------------------------------------------------------------------
