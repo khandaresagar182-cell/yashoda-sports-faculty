@@ -86,3 +86,22 @@ All force `display_errors=1`, connect to the **live DB**, and print schema/row d
 - **Phase 6 — regression + rollback doc.**
 
 Rollback at any point: `git reset --hard pre-refactor-baseline` (code) + restore the scratchpad dump (DB).
+
+---
+
+## Progress log
+
+### Phase 2 — structure — **done (no-op by decision)**
+Kept the flat web-root layout. No files moved, no URLs changed. Only new dir is `docs/`.
+Build scripts now exclude `docs/` and `_quarantine/`.
+
+### Phase 3 — dead code — **done**
+- `9302cd7` — `git mv` 12 dead files to `_quarantine/` (+ deny-all `.htaccess`); updated build scripts (`_quarantine`/`docs` in `/XD`; `db_*.php` keep-list trimmed to `db_setup.php` — **namecheap builds had been shipping `db_fix_student_hashes.php` + `db_check_student.php`**); removed stale `seed.sql` mentions from `db_setup.php`.
+- Verify: `php -l` clean on all 82 remaining PHP files; no reference to any quarantined file; 9 routes → 200, no PHP errors.
+- `be28e8d` — deleted `_quarantine/`. Recover with `git revert 9302cd7..be28e8d` or checkout from `9302cd7^`.
+- Result: 93 → 82 PHP files.
+
+### Phase 4 — security — pending
+Order: S1 → S3 → S2 → S5 → S6 → S4 → D. One commit each, behaviour-identical for legit users.
+- S1 approved: `serve_file.php` gate = faculty (any) **OR** the student who owns the doc; anon → 403.
+- S4 (`session.use_strict_mode=0`) still needs a decision — flip to `1` and test login on cPanel, or leave.
