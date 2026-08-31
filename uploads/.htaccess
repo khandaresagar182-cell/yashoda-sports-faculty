@@ -6,7 +6,26 @@
     </IfModule>
 </FilesMatch>
 
-# Treat everything else as static
+# Explicitly allow access to safe static file types (PDF, images).
+# Required for Namecheap / LiteSpeed shared hosting where the default
+# may block direct access to uploaded files.
+<FilesMatch "\.(pdf|jpg|jpeg|png|gif|webp)$">
+    <IfModule mod_authz_core.c>
+        Require all granted
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Allow from all
+    </IfModule>
+</FilesMatch>
+
+# Proper MIME types for uploaded files
+AddType application/pdf .pdf
+AddType image/jpeg .jpg .jpeg
+AddType image/png .png
+AddType image/webp .webp
+
+# Security headers for served files
 <IfModule mod_headers.c>
     Header set X-Content-Type-Options "nosniff"
 </IfModule>

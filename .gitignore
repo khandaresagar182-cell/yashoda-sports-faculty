@@ -41,3 +41,7 @@ csf_portal_dump.sql
 
 # Ad-hoc live-DB debug scripts (db_setup.php / db_verify.php / db_dept_check.php /
 # db_fix_seed_hashes.php / sql/fix-seed-hashes.php are intentionally tracked)
+
+# Local DB credentials file — holds production password on GoDaddy where env[]
+# is blocked. The real file is created manually on the server (see DEPLOY.md).
+includes/config.local.php

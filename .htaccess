@@ -1,14 +1,33 @@
 # College Sports Faculty Portal — root .htaccess
+
 Options -Indexes
 
-# Block direct access to internal folders
-RedirectMatch 403 ^/college-sports-faculty/includes/.*$
-RedirectMatch 403 ^/college-sports-faculty/sql/.*$
+# Block direct web access to internal folders and credential files.
+# The rules below handle both hosting layouts:
+#   1. App served from a subfolder  (XAMPP / htdocs/college-sports-faculty/)
+#   2. App served from the docroot   (Namecheap/GoDaddy cPanel / public_html/)
 
-# Force trailing-slash consistency
+# Always block the credentials file and sensitive files no matter where the app lives.
+<FilesMatch "^(config\.local\.php|config\.local\.example\.php|\.user\.ini|php_errors\.log)$">
+    Require all denied
+</FilesMatch>
+
+# Block internal folders — generic (works when app is at docroot, e.g. cPanel)
+RedirectMatch 403 ^/(includes|sql|sessions)/.*$
+
+# Block internal folders — subfolder deploy (XAMPP / htdocs/<projectname>/)
+RedirectMatch 403 ^/[^/]+/(includes|sql|sessions)/.*$
+
+
+# Force trailing-slash consistency (placeholder for future routing)
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    # nothing yet — placeholder
+
+    # Serve uploaded files through PHP for reliable access on shared hosting.
+    # Prevents 403/404 caused by LiteSpeed/ModSecurity restrictions on Namecheap etc.
+    # Rewrites:  /uploads/documents/abc.pdf  →  serve_file.php?f=documents/abc.pdf
+    RewriteCond %{REQUEST_URI} ^/uploads/(documents|students|achievements|notices)/ [NC]
+    RewriteRule ^uploads/(.+)$ serve_file.php?f=$1 [L,QSA]
 </IfModule>
 
 # Default character set

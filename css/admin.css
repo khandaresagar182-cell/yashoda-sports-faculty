@@ -551,6 +551,10 @@ a {
 .btn-act.export:hover { background: var(--light-gray); }
 .btn-act.delete  { background: #fff5f5; color: #c53030; border: 1px solid #fed7d7; }
 .btn-act.delete:hover { background: #fed7d7; }
+.btn-act.unlock  { background: rgba(25,135,84,.1); color: #146c43; border: 1px solid rgba(25,135,84,.3); }
+.btn-act.unlock:hover { background: rgba(25,135,84,.18); }
+.btn-act.lock    { background: var(--off-white); color: #664d03; border: 1px solid rgba(255,193,7,.4); }
+.btn-act.lock:hover { background: rgba(255,193,7,.12); }
 
 .record-document {
     background: var(--white);
@@ -1143,27 +1147,106 @@ a {
 .empty-state p { font-size: 0.88rem; color: var(--medium-gray); }
 
 @media (max-width: 992px) {
-    .profile-banner { flex-direction: column; text-align: center; padding: 1.5rem; }
+    .profile-banner { flex-direction: column; text-align: center; padding: 1.25rem; gap: 1rem; }
+    .profile-meta-chips { justify-content: center; }
     .profile-actions { justify-content: center; }
-    .record-document { overflow-x: auto; }
+    .record-document { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .search-input-row { flex-direction: column; }
+    .search-header { flex-direction: column; align-items: flex-start; }
+    .search-header-right { width: 100%; }
+    .top-bar { padding: 0.75rem 1rem; }
+    .content-body { padding: 1.25rem; }
+    /* Data table horizontal scroll */
+    .results-panel { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .data-table { min-width: 600px; }
+    .ach-table { min-width: 500px; }
+    /* Form grid to 2 col on tablet */
+    .form-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; }
+    /* Top bar compact */
+    .breadcrumb-nav { font-size: 0.8rem; }
+    .top-bar-title h1 { font-size: 1.1rem; }
 }
+
 @media (max-width: 768px) {
     .search-header { flex-direction: column; }
+    .search-header-left h1 { font-size: 1.3rem; }
+    .search-header-right { flex-direction: column; width: 100%; }
+    .btn-primary-action, .btn-outline-action { width: 100%; justify-content: center; }
+    .search-modes { flex-wrap: wrap; }
+    .search-mode-btn { flex: 1; min-width: 0; justify-content: center; font-size: 0.78rem; padding: 0.45rem 0.75rem; }
     .data-table { font-size: 0.82rem; }
-    .data-table thead th, .data-table tbody td { padding: 0.6rem 0.6rem; }
+    .data-table thead th, .data-table tbody td { padding: 0.55rem 0.6rem; }
     .hide-mobile { display: none !important; }
+    /* Record table to stacked layout */
     .record-table, .record-table tbody, .record-table tr, .record-table td { display: block; width: 100% !important; }
     .record-table tr { display: grid; grid-template-columns: 40% 60%; border-bottom: 1px solid #d1d5db; }
     .record-table td { border: none; border-bottom: 1px solid #eee; padding: 0.5rem 0.75rem; }
     .record-table td.rec-label { white-space: normal; font-size: 0.75rem; }
     .record-section-row td { grid-column: 1 / -1; }
+    /* Profile photo smaller */
+    .profile-photo, .profile-photo-placeholder { width: 90px; height: 110px; }
+    .photo-cell .rec-photo, .photo-cell .rec-photo-placeholder { width: 80px; height: 100px; }
+    /* Form section compact */
+    .form-section { padding: 1.25rem; border-radius: 10px; }
+    .form-section h2 { font-size: 1.05rem; }
+    .form-actions { flex-direction: column; }
+    .btn-save, .btn-cancel { width: 100%; justify-content: center; }
+    /* Results footer */
+    .results-footer { flex-direction: column; gap: 0.75rem; text-align: center; }
+    .results-header { flex-direction: column; gap: 0.5rem; align-items: flex-start; }
+    /* Student cell compact */
+    .student-cell { gap: 0.5rem; }
+    .student-avatar, .student-avatar-placeholder { width: 34px; height: 34px; }
+    .student-name-group h4 { font-size: 0.82rem; }
+    .student-name-group span { font-size: 0.7rem; }
 }
+
 @media (max-width: 576px) {
     .search-modes { flex-wrap: wrap; }
     .results-footer { flex-direction: column; gap: 0.75rem; }
-    .profile-info h1 { font-size: 1.3rem; }
+    .profile-info h1 { font-size: 1.2rem; }
+    .profile-info .enrollment { font-size: 0.82rem; }
+    .meta-chip { font-size: 0.72rem; padding: 0.3rem 0.65rem; }
     .ach-table { font-size: 0.78rem; }
-    .ach-table thead th, .ach-table tbody td { padding: 0.4rem 0.6rem; font-size: 0.75rem; }
+    .ach-table thead th, .ach-table tbody td { padding: 0.4rem 0.5rem; font-size: 0.72rem; }
     .form-grid { grid-template-columns: 1fr; }
+    .form-group input, .form-group select, .form-group textarea { padding: 0.6rem 0.75rem; font-size: 0.88rem; }
+    .form-group label { font-size: 0.72rem; }
+    .content-body { padding: 1rem 0.75rem; }
+    /* Top bar ultra compact */
+    .top-bar { padding: 0.6rem 0.75rem; }
+    .sidebar-toggle { padding: 0.35rem 0.45rem; font-size: 1rem; }
+    .breadcrumb-nav { font-size: 0.78rem; gap: 0.35rem; }
+    /* Search panel compact */
+    .search-panel { padding: 1rem; border-radius: 10px; }
+    .search-input-wrapper input { padding: 0.65rem 0.65rem 0.65rem 2.5rem; font-size: 0.88rem; }
+    .btn-search { padding: 0.65rem 1.2rem; font-size: 0.85rem; width: 100%; justify-content: center; }
+    /* Context badges compact */
+    .context-badge { font-size: 0.68rem; padding: 0.3rem 0.65rem; }
+    /* Pagination compact */
+    .pagination-btns { flex-wrap: wrap; }
+    .page-btn { width: 30px; height: 30px; font-size: 0.75rem; }
+    /* Photo upload compact */
+    .photo-upload { flex-direction: column; align-items: flex-start; gap: 0.75rem; }
+    .photo-preview { width: 70px; height: 70px; }
+    /* Actions */
+    .btn-act { font-size: 0.78rem; padding: 0.4rem 0.8rem; }
+    .profile-actions { gap: 0.4rem; }
+    /* Sport tags compact */
+    .sport-tag { font-size: 0.68rem; padding: 0.15rem 0.45rem; }
+    /* Toast compact */
+    .toast-notification { bottom: 1rem; right: 1rem; left: 1rem; font-size: 0.82rem; padding: 0.85rem 1.15rem; }
 }
+
+/* ---------- Tiny (≤400px) ---------- */
+@media (max-width: 400px) {
+    .profile-info h1 { font-size: 1.05rem; }
+    .profile-banner { padding: 1rem; }
+    .form-section { padding: 1rem; }
+    .form-section h2 { font-size: 0.95rem; }
+    .search-header-left h1 { font-size: 1.1rem; }
+    .content-body { padding: 0.75rem 0.5rem; }
+    .top-bar { padding: 0.5rem 0.6rem; }
+    .btn-primary-action { padding: 0.55rem 1rem; font-size: 0.8rem; }
+}
+
