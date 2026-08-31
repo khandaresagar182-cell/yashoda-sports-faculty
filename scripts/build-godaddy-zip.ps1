@@ -31,6 +31,8 @@ robocopy $projectRoot $stagingDir /E /XD `
     "tests" `
     "uploads" `
     "node_modules" `
+    "_quarantine" `
+    "docs" `
     | Out-Null
 
 # --- 2. Remove individual files we don't want on the server ---
@@ -39,10 +41,10 @@ robocopy $projectRoot $stagingDir /E /XD `
 $dumpFile = Join-Path $stagingDir 'csf_portal_dump.sql'
 if (Test-Path $dumpFile) { Remove-Item $dumpFile -Force }
 
-# One-off debug scripts that have piled up across sessions.
-# Keep the documented helpers (db_setup, db_verify, db_dept_check, db_fix_seed_hashes).
+# One-off debug scripts. Only db_setup.php ships (token-gated, deleted after
+# first run). The rest were quarantined out of the repo in the cleanup pass.
 Get-ChildItem -Path $stagingDir -Filter 'db_*.php' -File | Where-Object {
-    $_.Name -notin @('db_setup.php','db_verify.php','db_dept_check.php','db_fix_seed_hashes.php')
+    $_.Name -notin @('db_setup.php')
 } | Remove-Item -Force
 
 # Editor / IDE junk

@@ -42,6 +42,8 @@ robocopy $projectRoot $stagingDir /E /XD `
     "tests" `
     "uploads" `
     "node_modules" `
+    "_quarantine" `
+    "docs" `
     | Out-Null
 
 Write-Host "    Done." -ForegroundColor Green
@@ -56,8 +58,9 @@ Write-Host "`n=== Step 2: Cleaning unwanted files ===" -ForegroundColor Cyan
 $dumpFile = Join-Path $stagingDir 'csf_portal_dump.sql'
 if (Test-Path $dumpFile) { Remove-Item $dumpFile -Force; Write-Host "    Removed csf_portal_dump.sql" }
 
-# 2b. One-off debug scripts — keep ONLY the documented helpers.
-$keepDbScripts = @('db_setup.php','db_verify.php','db_dept_check.php','db_fix_seed_hashes.php','db_fix_student_hashes.php','db_check_student.php')
+# 2b. One-off debug scripts — only db_setup.php ships (token-gated, deleted
+# after first run). The rest were quarantined out of the repo in the cleanup pass.
+$keepDbScripts = @('db_setup.php')
 Get-ChildItem -Path $stagingDir -Filter 'db_*.php' -File | Where-Object {
     $_.Name -notin $keepDbScripts
 } | ForEach-Object {
