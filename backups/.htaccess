@@ -1,0 +1,7 @@
+# Local DB dumps live here. Never web-accessible, never deployed.
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Deny from all
+</IfModule>

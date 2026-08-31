@@ -101,7 +101,16 @@ Build scripts now exclude `docs/` and `_quarantine/`.
 - `be28e8d` — deleted `_quarantine/`. Recover with `git revert 9302cd7..be28e8d` or checkout from `9302cd7^`.
 - Result: 93 → 82 PHP files.
 
-### Phase 4 — security — pending
-Order: S1 → S3 → S2 → S5 → S6 → S4 → D. One commit each, behaviour-identical for legit users.
-- S1 approved: `serve_file.php` gate = faculty (any) **OR** the student who owns the doc; anon → 403.
-- S4 (`session.use_strict_mode=0`) still needs a decision — flip to `1` and test login on cPanel, or leave.
+### Phase 4 — security — in progress
+
+| Item | Status | Commit |
+|---|---|---|
+| **S1** `serve_file.php` no authz on PII | **done** — `documents`/`students` now require faculty OR owning-student session; `notices`/`achievements` stay public (homepage links them). anon→403, faculty→normal, traversal still blocked. | `75ed253` |
+| **S2** `db.php` leaks `DATABASE_URL` password on 500 | **done** — masked to `user:***@host` on the error path. | `e06c19b` |
+| **S3** real DB name/user in `config.local.example.php` | **done** — placeholders. Old values remain in history (`c9886a3`); history-rewrite deferred, password never committed. | `a27d769` |
+| **S4** `session.use_strict_mode=0` | **needs decision** — recommend flip to `1` (pairs with the existing `session_regenerate_id(true)` on login; the DO-edge reason is gone on cPanel). Session change → wants go-ahead + a login test on live. |
+| **S5** logout via GET, no CSRF | **needs decision** — lowest severity (attacker can only sign you out). Clean fix = `?_csrf=` on 16 nav links + accept `$_GET['_csrf']` in `csrf_check()`. Recommend do-it or accept-as-is. |
+| **S6** `api/student_documents_status.php` inline auth | **reclassified: not a finding** — the inline `$_SESSION['student_id']` + `401 JSON` is the correct pattern for a JSON endpoint; `require_student()` would emit an HTML redirect. |
+| **S7** `/backups/*.sql` not blocked | open — add a `backups/.htaccess` deny-all (Phase 4 tail). |
+| **S8** TCPDF version unpinned | open — record the vendored version; no CVE check possible without it. |
+| **D** debug scripts | **largely resolved by Phase 3** — 5 quarantined+deleted; build scripts no longer ship them. `db_setup.php` kept: token-gated (`DB_SETUP_TOKEN`, `hash_equals`) + refuses if `students` exists. Residual "token holder can wipe DB" is by design. |

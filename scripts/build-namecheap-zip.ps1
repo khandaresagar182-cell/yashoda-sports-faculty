@@ -43,6 +43,7 @@ robocopy $projectRoot $stagingDir /E /XD `
     "uploads" `
     "node_modules" `
     "_quarantine" `
+    "backups" `
     "docs" `
     | Out-Null
 
