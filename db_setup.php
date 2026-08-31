@@ -57,14 +57,13 @@ if (!hash_equals($expected, $given)) {
 
 header('Content-Type: text/plain; charset=utf-8');
 
-// DigitalOcean managed MySQL clusters ship with only `defaultdb`. We need
-// to connect to it first, create csf_portal, then reconnect.
+// On DigitalOcean managed MySQL the only DB is `defaultdb`. We need to
+// connect to it first, create csf_portal, then reconnect.
+// On GoDaddy (and most shared hosts) the configured DB already exists —
+// we connect to it directly and skip the CREATE DATABASE step.
 $dbName = DB_NAME;
 
-// One-off connection to `defaultdb` (always present on DO managed MySQL)
-// so we can check for + create csf_portal without going through the
-// db() singleton (which calls exit() on connection failure).
-echo "==> connecting to defaultdb (server-level) ...\n";
+echo "==> opening server-level connection ...\n";
 $tmp = mysqli_init();
 if ($tmp === false) {
     echo "FAILED to init mysqli\n"; exit(1);
@@ -73,30 +72,57 @@ $use_ssl = (APP_ENV !== 'local') || getenv('DB_SSL') === 'true';
 if ($use_ssl) {
     @mysqli_ssl_set($tmp, null, null, null, null, null);
 }
-$sslFlag = defined('MYSQLI_CLIENT_SSL') ? MYSQLI_CLIENT_SSL : 0;
-$ok = mysqli_real_connect(
-    $tmp, DB_HOST, DB_USER, DB_PASS, 'defaultdb', DB_PORT, null, $sslFlag
-);
+// Only set the SSL client flag if SSL is actually requested. MYSQLI_CLIENT_SSL
+// is *defined* on any mysqli build that supports SSL — its value is 4 — but
+// passing it as a flag forces SSL, which GoDaddy's mysqli stream cannot do
+// (their builds lack OpenSSL linked into the stream).
+$sslFlag = ($use_ssl && defined('MYSQLI_CLIENT_SSL')) ? MYSQLI_CLIENT_SSL : 0;
+// Belt-and-braces: explicitly tell mysqli not to try SSL when we don't want it.
+// Available since PHP 8.1; falls back silently if the constant is missing.
+if (!$use_ssl && defined('MYSQLI_SSL_MODE_DISABLED')) {
+    @mysqli_options($tmp, 101 /* MYSQLI_OPT_SSL_MODE */, 0 /* DISABLED */);
+}
+
+// Try connecting to the configured DB first (works on GoDaddy, DO managed
+// MySQL after first run, and most shared hosts). If that fails because the
+// DB doesn't exist yet, fall back to `defaultdb` (DigitalOcean's initial DB).
+$ok = false;
+$err = '';
+$tryDbs = [$dbName, 'defaultdb'];
+foreach ($tryDbs as $tryDb) {
+    $ok = mysqli_real_connect(
+        $tmp, DB_HOST, DB_USER, DB_PASS, $tryDb, DB_PORT, null, $sslFlag
+    );
+    if ($ok) {
+        echo "    OK — connected to `$tryDb`\n";
+        break;
+    }
+    $err = mysqli_connect_error();
+}
 if (!$ok) {
-    echo "FAILED to connect to defaultdb: " . mysqli_connect_error() . "\n";
+    echo "FAILED to connect to any of: " . implode(', ', $tryDbs) . "\n";
+    echo "Last error: $err\n";
     exit(1);
 }
-echo "    OK\n";
 
-// Does csf_portal exist?
-$exists = mysqli_query($tmp, "SHOW DATABASES LIKE '$dbName'");
-$row = $exists ? mysqli_fetch_row($exists) : null;
-if ($exists instanceof mysqli_result) mysqli_free_result($exists);
-if (!$row) {
-    echo "==> csf_portal does not exist. Creating it ...\n";
+// Now $tmp is connected to either $dbName (already exists) or 'defaultdb'
+// (DO managed MySQL bootstrap). Discover which one and conditionally CREATE.
+$currentDbResult = mysqli_query($tmp, "SELECT DATABASE()");
+$currentDbRow = $currentDbResult ? mysqli_fetch_row($currentDbResult) : null;
+if ($currentDbResult instanceof mysqli_result) mysqli_free_result($currentDbResult);
+$currentDb = $currentDbRow[0] ?? '';
+
+if ($currentDb === $dbName) {
+    echo "==> $dbName already exists.\n";
+} else {
+    // We're on `defaultdb` (or similar). Create the real DB.
+    echo "==> $dbName does not exist on this server. Creating it ...\n";
     $createSql = "CREATE DATABASE `$dbName` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci";
     if (!mysqli_query($tmp, $createSql)) {
         echo "FAILED to create $dbName: " . mysqli_error($tmp) . "\n";
         exit(1);
     }
     echo "    OK — created $dbName\n";
-} else {
-    echo "==> csf_portal already exists.\n";
 }
 mysqli_close($tmp);
 
@@ -108,10 +134,33 @@ echo "==> connected to " . DB_NAME . "\n";
 // (db_one() auto-appends LIMIT 1, which fails on SHOW statements.)
 $check = db_select("SHOW TABLES LIKE 'students'");
 if (!empty($check)) {
-    echo "db_setup: students table already exists. Refusing to re-run.\n";
-    echo "If you want a fresh start, DROP DATABASE first (manually) and re-run.\n";
-    echo "Otherwise, delete db_setup.php from the repo and redeploy.\n";
-    exit;
+    if (empty($_GET['reset'])) {
+        echo "db_setup: students table already exists. Refusing to re-run.\n";
+        echo "If you want a fresh start, pass ?reset=1 along with the token.\n";
+        echo "Otherwise, delete db_setup.php from the repo and redeploy.\n";
+        exit;
+    }
+    echo "==> ?reset=1 passed — dropping all tables and re-running from scratch\n";
+    $conn2 = db();
+    // Disable FK checks for the wipe. SHOW TABLES returns rows in arbitrary
+    // order, so a child table may be dropped first (which works) or a parent
+    // table may be dropped first (which fails with "foreign key constraint
+    // fails"). Disabling checks lets MySQL drop them in any order; we turn
+    // checks back on immediately after so the schema.sql CREATE TABLEs run
+    // with FK enforcement in effect (which catches schema mistakes).
+    db_execute("SET FOREIGN_KEY_CHECKS = 0");
+    $tables = db_select("SHOW TABLES");
+    foreach ($tables as $row) {
+        $name2 = reset($row);
+        // SHOW TABLES returns table name as the only column.
+        $t = preg_replace('/[^a-zA-Z0-9_]/', '', (string)$name2);
+        if ($t === '') continue;
+        @db_execute("DROP TABLE IF EXISTS `$t`");
+    }
+    db_execute("SET FOREIGN_KEY_CHECKS = 1");
+    echo "    OK — all tables dropped\n";
+    $conn2 = null;
+    $check = [];
 }
 
 /* ---------------- run the three SQL files ---------------- */
@@ -149,6 +198,24 @@ $files  = [
     'migration-v24-mgmt-arch-games.sql',
     'migration-v26-pdf-only-docs.sql',
     'migration-v27-passport-photo.sql',
+    'migration-v28-admission-ssc-hsc-diploma-years.sql',
+    'migration-v29-department-name.sql',
+    'migration-v30-permanent-current-address.sql',
+    'migration-v31-gap-year.sql',
+    'migration-v32-participation-levels.sql',
+    'migration-v33-gap-certificate-conditional.sql',
+    'migration-v34-standardize-document-requirements.sql',
+    'migration-v35-gender-split-lists.sql',
+    'migration-v36-jersey-gender.sql',
+    'migration-v37-course-duration.sql',
+    'migration-v38-edit-unlocked.sql',
+    'migration-v39-whatsapp-no.sql',
+    'migration-v40-father-name.sql',
+    'migration-v41-aadhar-number.sql',
+    'migration-v42-first-admission-years.sql',
+    'migration-v43-unified-game-catalog.sql',
+    'migration-v44-bank-details.sql',
+    'migration-v45-eligibility-archive.sql',
     'migration_student_auth.sql',
 ];
 
@@ -164,6 +231,38 @@ foreach ($files as $name) {
     if ($sql === false) {
         echo "db_setup: failed to read $path\n";
         exit(1);
+    }
+
+    // The committed schema.sql hardcodes `csf_portal` because DigitalOcean
+    // managed MySQL lets you pick the DB name. On GoDaddy the DB name is
+    // forced to `<cpaneluser>_csfportal`. Rewrite CREATE DATABASE / USE
+    // statements on the fly so the same SQL files work on both hosts.
+    if ($dbName !== 'csf_portal') {
+        $sql = preg_replace(
+            '/(CREATE\s+DATABASE\s+IF\s+NOT\s+EXISTS\s+`?)csf_portal(`?)/i',
+            '$1' . str_replace('`', '', $dbName) . '$2',
+            $sql
+        );
+        $sql = preg_replace(
+            '/(USE\s+`?)csf_portal(`?\s*;)/i',
+            '$1' . str_replace('`', '', $dbName) . '$2',
+            $sql
+        );
+    }
+
+    // Migrations are append-only and were written for empty DBs. But seed.ready.sql
+    // already populates faculty_departments and other seedable tables, so the
+    // early migrations (v3, v4, v14, v16) can fail with "Duplicate entry" on
+    // re-runs of schema+seed. Rewrite their INSERTs to INSERT IGNORE so they
+    // become idempotent without changing the committed SQL files. Skip the
+    // base seed/schema files — those should fail loudly if there's a real
+    // problem, not silently swallow duplicates.
+    if (strpos($name, 'migration-') === 0 || strpos($name, 'migration_') === 0) {
+        $sql = preg_replace(
+            '/^INSERT\s+INTO\b/im',
+            'INSERT IGNORE INTO',
+            $sql
+        );
     }
 
     echo "==> $name\n";
