@@ -104,6 +104,7 @@ require_once __DIR__ . '/csrf.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/jersey.php';
 require_once __DIR__ . '/upload.php';
+require_once __DIR__ . '/mailer.php';
 require_once __DIR__ . '/student_rendering.php';
 require_once __DIR__ . '/seed_check.php';
 require_once __DIR__ . '/mobile_sidebar.php';

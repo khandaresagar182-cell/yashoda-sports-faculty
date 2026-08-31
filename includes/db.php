@@ -20,12 +20,33 @@ declare(strict_types=1);
 // error. Falling back to localhost in production is a foot-gun.
 $isLocal = (getenv('APP_ENV') === 'local') || (getenv('APP_ENV') === false);
 
+/**
+ * Optional local credentials file. Used on shared hosts (GoDaddy cPanel)
+ * that block env[] in .user.ini / MultiPHP INI Editor. Returns [] when
+ * the file is absent so this stays a no-op on hosts that prefer env vars.
+ * The file is .gitignored — see includes/config.local.example.php for shape.
+ */
+function _db_local_config(): array
+{
+    static $cached = null;
+    if ($cached !== null) return $cached;
+    $path = __DIR__ . '/config.local.php';
+    if (is_file($path)) {
+        $val = require $path;
+        $cached = is_array($val) ? $val : [];
+    } else {
+        $cached = [];
+    }
+    return $cached;
+}
+
 if ($isLocal) {
-    if (!defined('DB_HOST'))  define('DB_HOST',  getenv('DB_HOST') ?: getenv('MYSQLHOST') ?: '127.0.0.1');
-    if (!defined('DB_USER'))  define('DB_USER',  getenv('DB_USER') ?: getenv('MYSQLUSER') ?: 'root');
-    if (!defined('DB_PASS'))  define('DB_PASS',  getenv('DB_PASS') ?: getenv('MYSQLPASSWORD') ?: '');
-    if (!defined('DB_NAME'))  define('DB_NAME',  getenv('DB_NAME') ?: getenv('MYSQLDATABASE') ?: 'csf_portal');
-    if (!defined('DB_PORT'))  define('DB_PORT',  (int)(getenv('DB_PORT') ?: getenv('MYSQLPORT') ?: 3306));
+    $local = _db_local_config();
+    if (!defined('DB_HOST'))  define('DB_HOST',  getenv('DB_HOST') ?: getenv('MYSQLHOST') ?: ($local['DB_HOST'] ?? '127.0.0.1'));
+    if (!defined('DB_USER'))  define('DB_USER',  getenv('DB_USER') ?: getenv('MYSQLUSER') ?: ($local['DB_USER'] ?? 'root'));
+    if (!defined('DB_PASS'))  define('DB_PASS',  getenv('DB_PASS') ?: getenv('MYSQLPASSWORD') ?: ($local['DB_PASS'] ?? ''));
+    if (!defined('DB_NAME'))  define('DB_NAME',  getenv('DB_NAME') ?: getenv('MYSQLDATABASE') ?: ($local['DB_NAME'] ?? 'csf_portal'));
+    if (!defined('DB_PORT'))  define('DB_PORT',  (int)(getenv('DB_PORT') ?: getenv('MYSQLPORT') ?: ($local['DB_PORT'] ?? 3306)));
 } else {
     // Production: try multiple sources for DB credentials.
     //
@@ -78,12 +99,32 @@ if ($isLocal) {
     foreach (['host' => 'DB_HOST', 'user' => 'DB_USER', 'name' => 'DB_NAME'] as $field => $const) {
         if (empty(${$field})) $missing[] = $const;
     }
+
+    // Fallback: a local PHP file with credentials, used on hosts (e.g. GoDaddy
+    // shared cPanel) that block env[] in .user.ini / MultiPHP INI Editor.
+    // The file is .gitignored. If it exists and the env vars are still missing,
+    // pull from it. See includes/config.local.example.php for the shape.
+    if (!empty($missing)) {
+        $local = _db_local_config();
+        if (!$host && !empty($local['DB_HOST'])) $host = $local['DB_HOST'];
+        if (!$user && !empty($local['DB_USER'])) $user = $local['DB_USER'];
+        if (!$pass && !empty($local['DB_PASS'])) $pass = $local['DB_PASS'];
+        if (!$name && !empty($local['DB_NAME'])) $name = $local['DB_NAME'];
+        if (!$port && !empty($local['DB_PORT'])) $port = $local['DB_PORT'];
+        // Recompute missing list with the new values.
+        $missing = [];
+        foreach (['host' => 'DB_HOST', 'user' => 'DB_USER', 'name' => 'DB_NAME'] as $field => $const) {
+            if (empty(${$field})) $missing[] = $const;
+        }
+    }
+
     if (!empty($missing)) {
         http_response_code(500);
         header('Content-Type: text/plain; charset=utf-8');
         echo "Database configuration error: missing env vars: " . implode(', ', $missing) . "\n";
         echo "Set DB_HOST, DB_USER, DB_NAME, DB_PORT, DB_PASS as Environment Variables on the App,\n";
-        echo "OR fix the DigitalOcean managed database binding so DATABASE_URL resolves.\n";
+        echo "OR fix the DigitalOcean managed database binding so DATABASE_URL resolves,\n";
+        echo "OR create includes/config.local.php with the credentials (see includes/config.local.example.php).\n";
         echo "Currently DATABASE_URL = " . var_export($envLookup('DATABASE_URL'), true) . "\n";
         exit;
     }
@@ -108,10 +149,34 @@ function db(): mysqli
         return $conn;
     }
 
-    // Decide whether to enforce SSL before opening the socket. Managed
-    // databases (DigitalOcean, AWS RDS, etc.) reject non-SSL connections;
-    // local XAMPP/development does not support SSL out of the box.
-    $use_ssl = (APP_ENV !== 'local') || getenv('DB_SSL') === 'true';
+    // Decide whether to enforce SSL before opening the socket.
+    //
+    // Managed databases (DigitalOcean, AWS RDS, etc.) reject non-SSL
+    // connections; local XAMPP/development does not support SSL out of the
+    // box; and **shared hosting** (Namecheap, GoDaddy cPanel) connects to
+    // MySQL on localhost — which also does NOT support SSL.
+    //
+    // Logic:
+    //   1. If DB_SSL env/config is explicitly 'false' → SSL off.
+    //   2. If DB_SSL env/config is explicitly 'true'  → SSL on.
+    //   3. If DB_HOST is localhost or 127.0.0.1       → SSL off (shared host).
+    //   4. If APP_ENV is 'local'                      → SSL off.
+    //   5. Otherwise (remote managed DB)              → SSL on.
+    $db_ssl_env = getenv('DB_SSL');
+    if ($db_ssl_env === false && isset($_SERVER['DB_SSL'])) {
+        $db_ssl_env = $_SERVER['DB_SSL'];
+    }
+    if ($db_ssl_env === 'false' || $db_ssl_env === '0') {
+        $use_ssl = false;
+    } elseif ($db_ssl_env === 'true' || $db_ssl_env === '1') {
+        $use_ssl = true;
+    } elseif (in_array(DB_HOST, ['localhost', '127.0.0.1', '::1'], true)) {
+        // Shared hosting (Namecheap, GoDaddy): MySQL on localhost never
+        // supports SSL. Skip it so the connection doesn't fail silently.
+        $use_ssl = false;
+    } else {
+        $use_ssl = (APP_ENV !== 'local');
+    }
 
     $conn = mysqli_init();
     if ($conn === false) {

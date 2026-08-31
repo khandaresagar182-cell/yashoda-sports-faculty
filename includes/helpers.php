@@ -18,6 +18,10 @@ function h($s): string
 /**
  * Cache-busted asset URL.
  *   echo '<link href="' . url('css/admin.css') . '">';
+ *
+ * Uploaded files (uploads/documents/*, uploads/students/*, etc.) are routed
+ * through serve_file.php so that LiteSpeed / ModSecurity on shared hosting
+ * (Namecheap) cannot 403-block them.
  */
 function url(string $path): string
 {
@@ -38,13 +42,22 @@ function url(string $path): string
             $prefix = '/' . $dir_name;
         }
 
-        $web_path = $prefix . '/' . ltrim($path, '/');
-
-        // Add cache buster if file exists
-        $cached[$path] = $web_path . (is_file($abs) ? '?v=' . filemtime($abs) : '');
+        // For uploaded files, route through serve_file.php for reliable
+        // access on LiteSpeed / Namecheap shared hosting (avoids 403).
+        $clean = ltrim($path, '/');
+        if (preg_match('#^uploads/(documents|students|achievements|notices)/.+#', $clean)) {
+            // serve_file.php expects f=documents/xxx.pdf (without "uploads/" prefix)
+            $file_param = substr($clean, strlen('uploads/'));
+            $cached[$path] = $prefix . '/serve_file.php?f=' . rawurlencode($file_param);
+        } else {
+            $web_path = $prefix . '/' . $clean;
+            // Add cache buster if file exists
+            $cached[$path] = $web_path . (is_file($abs) ? '?v=' . filemtime($abs) : '');
+        }
     }
     return $cached[$path];
 }
+
 
 /**
  * 302 redirect + exit. Pass an absolute or root-relative path.
@@ -138,6 +151,18 @@ function academic_year_options(): array
     return $opts;
 }
 
+/**
+ * Stored value => display label for the Men/Women list-gender picker
+ * used by Provisional Player Lists and Final Team Lists. The stored
+ * value matches students.gender exactly so it can be used directly in
+ * queries; the label follows the "Men/Women" convention already used
+ * by the faculty dashboard's Players by Game card.
+ */
+function gender_list_options(): array
+{
+    return ['Male' => 'Men', 'Female' => 'Women'];
+}
+
 function sport_options(): array
 {
     return [
@@ -151,6 +176,37 @@ function sport_options(): array
 function gender_options(): array  { return ['Male','Female','Other']; }
 function blood_options(): array  { return ['A+','A-','B+','B-','O+','O-','AB+','AB-']; }
 function year_options(): array   { return ['First','Second','Third','Final']; }
+
+/**
+ * The five tournament-level participation questions asked in Step 4
+ * (Played History). Each level has a `_played` (TINYINT 0/1/NULL) and
+ * a `_year` (free text) column on `students`.
+ */
+function participation_levels(): array
+{
+    return [
+        ['slug' => 'zonal',           'label' => 'Zonal',           'played_col' => 'zonal_played',           'year_col' => 'zonal_year'],
+        ['slug' => 'interzonal',      'label' => 'Interzonal',      'played_col' => 'interzonal_played',      'year_col' => 'interzonal_year'],
+        ['slug' => 'all_india',       'label' => 'All India',       'played_col' => 'all_india_played',       'year_col' => 'all_india_year'],
+        ['slug' => 'west_zone',       'label' => 'West Zone',       'played_col' => 'west_zone_played',       'year_col' => 'west_zone_year'],
+        ['slug' => 'krida_mahotsav',  'label' => 'Krida Mahotsav',  'played_col' => 'krida_mahotsav_played',  'year_col' => 'krida_mahotsav_year'],
+    ];
+}
+
+/**
+ * A student's wizard is locked once they've submitted it — every step
+ * (and every write endpoint in student_dashboard_process.php) becomes
+ * read-only, and student-dashboard.php shows the "Submitted" screen
+ * instead of the editable wizard. Faculty re-opens editing for a
+ * single student via the "Allow Edit" action on student-profile.php,
+ * which sets edit_unlocked = 1; the next successful submit flips it
+ * back to 0, re-locking the form. Accepts a row (or partial row) from
+ * `students` that includes form_submitted_at and edit_unlocked.
+ */
+function student_form_locked(array $student): bool
+{
+    return !empty($student['form_submitted_at']) && (int)($student['edit_unlocked'] ?? 0) === 0;
+}
 
 function dept_label(?int $id, ?array $depts = null): string
 {
