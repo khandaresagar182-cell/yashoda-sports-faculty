@@ -209,7 +209,10 @@ function draw_eligibility_form(TCPDF $pdf, array $data): void
     $tableY  = 187.6;
     $headerH = 9.9;
     $rowH    = 4.72;
-    $colW    = [12.0, 62.1, 21.9, 15.9, 30.9, 22.0, 22.4];
+    // 10 columns — "Mobile No.", "Bank A/C Number" and "IFSC Code" were
+    // inserted before "Signature of Participant"; existing widths trimmed
+    // to keep the table on the portrait page.
+    $colW    = [10.0, 36.0, 16.0, 13.0, 24.0, 17.0, 14.0, 20.0, 15.0, 20.0];
     $headers = [
         "Sr.\nNo",
         'Name of Participant',
@@ -217,6 +220,9 @@ function draw_eligibility_form(TCPDF $pdf, array $data): void
         "Roll\nNo",
         "Enrollment\nNumber",
         "Date Of\nBirth",
+        "Mobile\nNo.",
+        "Bank A/C\nNumber",
+        "IFSC\nCode",
         "Signature of\nParticipant",
     ];
 
@@ -259,6 +265,9 @@ function draw_eligibility_form(TCPDF $pdf, array $data): void
             trim((string)($participant['roll_no'] ?? '')),
             trim((string)($participant['enrollment_no'] ?? '')),
             eligibility_dob(isset($participant['dob']) ? (string)$participant['dob'] : null),
+            trim((string)($participant['mobile'] ?? '')),
+            trim((string)($participant['bank_account_number'] ?? '')),
+            strtoupper(trim((string)($participant['bank_ifsc'] ?? ''))),
             '',
         ];
         $x = $left;

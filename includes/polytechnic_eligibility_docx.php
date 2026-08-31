@@ -305,7 +305,10 @@ function poly_docx_page(
         [poly_docx_paragraph(poly_docx_run('Status of Team Manager: ______________________', ['bold' => true, 'size' => 18])), poly_docx_paragraph('')],
     ], [7500, 3420], ['row_heights' => [0 => 310, 1 => 310, 2 => 310, 3 => 310, 4 => 310]]);
 
-    $widths = [650, 3550, 1250, 920, 1760, 1250, 1540];
+    // 10 columns — "Mobile No.", "Bank A/C Number" and "IFSC Code" were
+    // inserted before "Signature of Participant"; existing widths trimmed
+    // to keep the 10-column table inside the portrait page margins.
+    $widths = [520, 1600, 950, 750, 1400, 1050, 950, 1350, 950, 700];
     $tableRows = [[
         poly_docx_paragraph(poly_docx_run("Sr.\nNo", ['bold' => true, 'size' => 15]), ['align' => 'center']),
         poly_docx_paragraph(poly_docx_run('Name of Participant', ['bold' => true, 'size' => 15]), ['align' => 'center']),
@@ -313,6 +316,9 @@ function poly_docx_page(
         poly_docx_paragraph(poly_docx_run("Roll\nNo", ['bold' => true, 'size' => 15]), ['align' => 'center']),
         poly_docx_paragraph(poly_docx_run("Enrollment\nNumber", ['bold' => true, 'size' => 15]), ['align' => 'center']),
         poly_docx_paragraph(poly_docx_run("Date Of\nBirth", ['bold' => true, 'size' => 15]), ['align' => 'center']),
+        poly_docx_paragraph(poly_docx_run("Mobile\nNo.", ['bold' => true, 'size' => 15]), ['align' => 'center']),
+        poly_docx_paragraph(poly_docx_run("Bank A/C\nNumber", ['bold' => true, 'size' => 15]), ['align' => 'center']),
+        poly_docx_paragraph(poly_docx_run("IFSC\nCode", ['bold' => true, 'size' => 15]), ['align' => 'center']),
         poly_docx_paragraph(poly_docx_run("Signature of\nParticipant", ['bold' => true, 'size' => 15]), ['align' => 'center']),
     ]];
     foreach ($participants as $index => $participant) {
@@ -323,6 +329,9 @@ function poly_docx_page(
             poly_docx_paragraph(poly_docx_run(trim((string)($participant['roll_no'] ?? '')), ['bold' => true, 'size' => 12]), ['align' => 'center']),
             poly_docx_paragraph(poly_docx_run(trim((string)($participant['enrollment_no'] ?? '')), ['bold' => true, 'size' => 12]), ['align' => 'center']),
             poly_docx_paragraph(poly_docx_run(poly_docx_dob($participant['dob'] ?? null), ['bold' => true, 'size' => 13]), ['align' => 'center']),
+            poly_docx_paragraph(poly_docx_run(trim((string)($participant['mobile'] ?? '')), ['bold' => true, 'size' => 12]), ['align' => 'center']),
+            poly_docx_paragraph(poly_docx_run(trim((string)($participant['bank_account_number'] ?? '')), ['bold' => true, 'size' => 12]), ['align' => 'center']),
+            poly_docx_paragraph(poly_docx_run(strtoupper(trim((string)($participant['bank_ifsc'] ?? ''))), ['bold' => true, 'size' => 12]), ['align' => 'center']),
             poly_docx_paragraph(''),
         ];
     }
