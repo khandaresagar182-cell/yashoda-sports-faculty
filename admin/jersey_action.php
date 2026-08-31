@@ -26,13 +26,15 @@ $me     = current_faculty();
 $action = trim((string)($_POST['action'] ?? ''));
 
 // Common params for redirect
-$game  = trim((string)($_POST['game'] ?? ''));
-$event = trim((string)($_POST['event'] ?? ''));
-$ay    = trim((string)($_POST['ay'] ?? ''));
+$game   = trim((string)($_POST['game'] ?? ''));
+$event  = trim((string)($_POST['event'] ?? ''));
+$ay     = trim((string)($_POST['ay'] ?? ''));
+$gender = trim((string)($_POST['gender'] ?? ''));
+if (!array_key_exists($gender, gender_list_options())) $gender = '';
 $dept_param = isset($_POST['dept']) && ctype_digit((string)$_POST['dept']) ? (int)$_POST['dept'] : null;
 
 $back = 'jersey_manage.php?' . http_build_query(array_filter([
-    'game' => $game, 'event' => $event, 'ay' => $ay, 'dept' => $dept_param,
+    'game' => $game, 'event' => $event, 'ay' => $ay, 'gender' => $gender, 'dept' => $dept_param,
 ], static fn($value) => $value !== null && $value !== ''));
 
 /* ================================================================== */
@@ -41,14 +43,14 @@ switch ($action) {
 
     /* -------------------------------------------------------------- */
     case 'toggle_form':
-        if ($game === '' || $event === '') {
-            flash_set('jersey_error', 'Game and event are required.', 'error');
+        if ($game === '' || $event === '' || $gender === '') {
+            flash_set('jersey_error', 'Gender, game, and event are required.', 'error');
             redirect($back);
         }
 
         $ay_val = $ay === '' ? null : $ay;
         $dept_id = jersey_forms_has_department_id()
-            ? jersey_department_for_team($game, $event, $ay_val)
+            ? jersey_department_for_team($game, $event, $ay_val, $gender)
             : null;
 
         if (jersey_forms_has_department_id() && $dept_id === null) {
@@ -57,13 +59,14 @@ switch ($action) {
         }
 
         [$dept_filter, $dept_params, $dept_types] = jersey_form_department_filter($dept_id);
+        [$gender_filter, $gender_params, $gender_types] = jersey_form_gender_filter($gender);
 
         // Check if form row exists
         $row = db_one(
             "SELECT id, is_open FROM jersey_forms
-              WHERE game_name = ? AND event_label = ? AND academic_year <=> ? $dept_filter",
-            array_merge([$game, $event, $ay_val], $dept_params),
-            'sss' . $dept_types
+              WHERE game_name = ? AND event_label = ? AND academic_year <=> ? $dept_filter $gender_filter",
+            array_merge([$game, $event, $ay_val], $dept_params, $gender_params),
+            'sss' . $dept_types . $gender_types
         );
 
         if ($row) {
@@ -75,25 +78,35 @@ switch ($action) {
             );
             flash_set('jersey_ok', $new_state ? 'Jersey form is now OPEN. Students can submit requests.' : 'Jersey form is now CLOSED.', 'success');
         } else {
-            // Create with a fresh access token
+            // Create with a fresh access token. Column list is built
+            // dynamically since department_id / gender may not exist
+            // yet on every environment (see includes/jersey.php).
             $token = bin2hex(random_bytes(24)); // 48 hex chars
+            $cols   = ['game_name', 'event_label', 'academic_year'];
+            $values = [$game, $event, $ay_val];
+            $vtypes = 'sss';
             if (jersey_forms_has_department_id()) {
-                db_insert(
-                    "INSERT INTO jersey_forms
-                        (game_name, event_label, academic_year, department_id, is_open, access_token, created_by)
-                     VALUES (?, ?, ?, ?, 1, ?, ?)",
-                    [$game, $event, $ay_val, $dept_id, $token, (int)$me['id']],
-                    'sssisi'
-                );
-            } else {
-                db_insert(
-                    "INSERT INTO jersey_forms
-                        (game_name, event_label, academic_year, is_open, access_token, created_by)
-                     VALUES (?, ?, ?, 1, ?, ?)",
-                    [$game, $event, $ay_val, $token, (int)$me['id']],
-                    'ssssi'
-                );
+                $cols[]   = 'department_id';
+                $values[] = $dept_id;
+                $vtypes  .= 'i';
             }
+            if (jersey_forms_has_gender()) {
+                $cols[]   = 'gender';
+                $values[] = $gender;
+                $vtypes  .= 's';
+            }
+            $values[] = $token;
+            $vtypes  .= 's';
+            $values[] = (int)$me['id'];
+            $vtypes  .= 'i';
+            $placeholders = implode(', ', array_fill(0, count($cols), '?'));
+
+            db_insert(
+                "INSERT INTO jersey_forms (" . implode(', ', $cols) . ", is_open, access_token, created_by)
+                 VALUES ($placeholders, 1, ?, ?)",
+                $values,
+                $vtypes
+            );
             flash_set('jersey_ok', 'Jersey form created and is now OPEN.', 'success');
         }
         redirect($back);
@@ -185,22 +198,23 @@ switch ($action) {
         break;
 
     case 'delete_all':
-        if ($game === '' || $event === '') {
-            flash_set('jersey_error', 'Game and event are required.', 'error');
+        if ($game === '' || $event === '' || $gender === '') {
+            flash_set('jersey_error', 'Gender, game, and event are required.', 'error');
             redirect($back);
         }
 
         $ay_val = $ay === '' ? null : $ay;
         $dept_id = jersey_forms_has_department_id()
-            ? jersey_department_for_team($game, $event, $ay_val)
+            ? jersey_department_for_team($game, $event, $ay_val, $gender)
             : null;
         [$dept_filter, $dept_params, $dept_types] = jersey_form_department_filter($dept_id);
+        [$gender_filter, $gender_params, $gender_types] = jersey_form_gender_filter($gender);
 
         $form = db_one(
             "SELECT id FROM jersey_forms
-              WHERE game_name = ? AND event_label = ? AND academic_year <=> ? $dept_filter",
-            array_merge([$game, $event, $ay_val], $dept_params),
-            'sss' . $dept_types
+              WHERE game_name = ? AND event_label = ? AND academic_year <=> ? $dept_filter $gender_filter",
+            array_merge([$game, $event, $ay_val], $dept_params, $gender_params),
+            'sss' . $dept_types . $gender_types
         );
 
         if ($form) {
@@ -221,7 +235,7 @@ switch ($action) {
 
         // Redirect back to final list instead of jersey manage
         redirect('final_list.php?' . http_build_query(array_filter([
-            'game' => $game, 'event' => $event, 'ay' => $ay, 'dept' => $dept_param,
+            'game' => $game, 'event' => $event, 'ay' => $ay, 'gender' => $gender, 'dept' => $dept_param,
         ], static fn($value) => $value !== null && $value !== '')));
         break;
 

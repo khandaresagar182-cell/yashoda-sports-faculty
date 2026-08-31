@@ -14,7 +14,10 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit('Method not allowed.');
 }
 
-csrf_check();
+// A user can leave the login page open long enough for its token to go
+// stale (session GC, XAMPP restart, back-button/bfcache). Bounce back to a
+// fresh login page instead of dead-ending on "Invalid CSRF token.".
+csrf_check('../faculty-login.php');
 
 // Already logged in?
 if (current_faculty()) {

@@ -244,6 +244,58 @@ $flash = flash_get('dashboard_info');
             .sidebar.open{left:0}
             .top-bar{padding:.75rem 1.25rem}
             .content-body{padding:1.25rem}
+            .gov-field{min-width: 100%; }
+            .gov-filter-actions { width: 100%; }
+            .gov-btn { width: 100%; justify-content: center; }
+            .data-card { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            .data-table { min-width: 600px; }
+        }
+        @media (max-width: 576px) {
+            .content-body { padding: 1rem 0.75rem; }
+            .stat-grid { gap: 0.75rem; }
+            .stat-card { padding: 1rem; }
+            .gov-filter-bar { padding: 1rem; gap: 1rem; }
+        }
+
+        /* ---- Data Management section ---- */
+        .dm-card { margin-top: 2rem; }
+        .dm-card .data-card-header h2 i { color: var(--medium-gray); }
+        .dm-body { padding: 1.35rem 1.5rem; }
+        .dm-row { display: flex; gap: 1.75rem; align-items: center; flex-wrap: wrap; justify-content: space-between; }
+        .dm-info { flex: 1; min-width: 280px; }
+        .dm-info h3 { font-size: 0.92rem; font-weight: 700; color: var(--primary-navy); margin: 0 0 0.3rem; }
+        .dm-info p { font-size: 0.82rem; color: var(--medium-gray); margin: 0; max-width: 660px; line-height: 1.55; }
+        .dm-info p .keep { color: #146c43; font-weight: 600; }
+        .dm-info p .warn { color: #c53030; font-weight: 600; }
+        .btn-danger-solid {
+            display: inline-flex; align-items: center; gap: 0.45rem; white-space: nowrap;
+            padding: 0.62rem 1.2rem; border: none; border-radius: 8px;
+            background: #c53030; color: #fff; font: inherit; font-size: 0.85rem; font-weight: 600;
+            cursor: pointer; transition: var(--transition-smooth);
+        }
+        .btn-danger-solid:hover:not(:disabled) { background: #9b2c2c; box-shadow: 0 6px 18px rgba(197,48,48,.28); transform: translateY(-1px); }
+        .btn-danger-solid:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .dm-modal { position: fixed; inset: 0; background: rgba(15,23,42,.55); display: flex; align-items: center; justify-content: center; z-index: 2000; padding: 1rem; }
+        .dm-modal[hidden] { display: none; }
+        .dm-modal-box { background: #fff; border-radius: 12px; max-width: 460px; width: 100%; box-shadow: 0 24px 60px rgba(0,0,0,.35); overflow: hidden; animation: dmPop .14s ease-out; }
+        @keyframes dmPop { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+        .dm-modal-head { display: flex; align-items: center; justify-content: space-between; padding: 0.95rem 1.25rem; background: #fff5f5; border-bottom: 1px solid #fed7d7; }
+        .dm-modal-head h3 { margin: 0; font-size: 0.98rem; font-weight: 700; color: #c53030; display: flex; align-items: center; gap: 0.5rem; }
+        .dm-modal-x { background: 0 0; border: none; font-size: 1.5rem; line-height: 1; color: var(--medium-gray); cursor: pointer; padding: 0 0.25rem; }
+        .dm-modal-x:hover { color: var(--dark-gray); }
+        .dm-modal-body { padding: 1.25rem; }
+        .dm-modal-body > p { font-size: 0.86rem; color: var(--dark-gray); margin: 0 0 0.5rem; line-height: 1.55; }
+        .dm-modal-body label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--primary-navy); margin: 0.9rem 0 0.3rem; }
+        .dm-modal-body code { background: var(--off-white); border: 1px solid var(--light-gray); border-radius: 4px; padding: 0.05rem 0.35rem; font-size: 0.8rem; color: #c53030; font-weight: 700; }
+        .dm-modal-body input { width: 100%; padding: 0.55rem 0.75rem; border: 1px solid var(--light-gray); border-radius: 6px; font: inherit; font-size: 0.9rem; letter-spacing: 0.5px; }
+        .dm-modal-body input:focus { outline: none; border-color: #c53030; box-shadow: 0 0 0 3px rgba(197,48,48,.12); }
+        .dm-modal-actions { display: flex; gap: 0.6rem; justify-content: flex-end; margin-top: 1.4rem; }
+        .btn-ghost { padding: 0.55rem 1rem; border: 1px solid var(--light-gray); border-radius: 8px; background: #fff; color: var(--dark-gray); font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+        .btn-ghost:hover { background: var(--off-white); }
+        @media (max-width: 576px) {
+            .dm-row { flex-direction: column; align-items: stretch; }
+            .btn-danger-solid { justify-content: center; }
         }
     </style>
 </head>
@@ -260,14 +312,14 @@ $flash = flash_get('dashboard_info');
             </div>
             <nav class="sidebar-nav">
                 <div class="sidebar-nav-label">Main</div>
-                <a href="dashboard.php" class="active">
-                    <i class="bi bi-speedometer2"></i> <span>Dashboard</span>
-                </a>
                 <?php if (has_multiple_departments()): ?>
                     <a href="../faculty-select.php?change=1">
                         <i class="bi bi-building"></i> <span>Select Faculty</span>
                     </a>
                 <?php endif; ?>
+                <a href="dashboard.php" class="active">
+                    <i class="bi bi-speedometer2"></i> <span>Dashboard</span>
+                </a>
                 <a href="../student-search.php">
                     <i class="bi bi-search"></i> <span>Search Students</span>
                 </a>
@@ -279,6 +331,9 @@ $flash = flash_get('dashboard_info');
                 </a>
                 <a href="final_list.php">
                     <i class="bi bi-check-all"></i> <span>Final Teams</span>
+                </a>
+                <a href="eligibility_archive.php">
+                    <i class="bi bi-folder2-open"></i> <span>Eligibility Archive</span>
                 </a>
                 <a href="jersey_dashboard.php">
                     <i class="bi bi-person-badge"></i> <span>Jersey Kit</span>
@@ -557,8 +612,104 @@ $flash = flash_get('dashboard_info');
                         </table>
                     <?php endif; ?>
                 </div>
+
+                <?php
+                    $purgeIsSuperGlobal = ($me['role'] === 'SUPER_ADMIN') && (effective_department_id() === null);
+                    $purgeScopeLabel = $purgeIsSuperGlobal
+                        ? 'every department'
+                        : ('the ' . ($me['department_name'] ?? 'current') . ' department');
+                ?>
+                <div class="data-card dm-card">
+                    <div class="data-card-header">
+                        <h2><i class="bi bi-database-fill-gear"></i> Data Management</h2>
+                    </div>
+                    <div class="dm-body">
+                        <div class="dm-row">
+                            <div class="dm-info">
+                                <h3>Reset student data &mdash; <?= h($purgeScopeLabel) ?></h3>
+                                <p>
+                                    Permanently deletes every student profile and everything students filled in:
+                                    uploaded documents &amp; photos, selected games, and provisional / final team entries.
+                                    <span class="keep">Eligibility archive files are kept.</span>
+                                    <span class="warn">This cannot be undone.</span>
+                                </p>
+                            </div>
+                            <button type="button" class="btn-danger-solid" id="dmOpenBtn">
+                                <i class="bi bi-trash3"></i> Delete student data
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dm-modal" id="dmModal" hidden>
+                    <div class="dm-modal-box" role="dialog" aria-modal="true" aria-labelledby="dmModalTitle">
+                        <div class="dm-modal-head">
+                            <h3 id="dmModalTitle"><i class="bi bi-exclamation-triangle-fill"></i> Confirm deletion</h3>
+                            <button type="button" class="dm-modal-x" id="dmCloseBtn" aria-label="Close">&times;</button>
+                        </div>
+                        <div class="dm-modal-body">
+                            <p>
+                                This permanently deletes <strong>all student records for <?= h($purgeScopeLabel) ?></strong>.
+                                Eligibility archive files are kept. <strong>This cannot be undone.</strong>
+                            </p>
+                            <form method="post" action="student_data_purge.php" id="dmForm">
+                                <?= csrf_field() ?>
+                                <label for="dmConfirm">Type <code>DELETE</code> to confirm</label>
+                                <input type="text" id="dmConfirm" name="confirm" autocomplete="off" placeholder="DELETE">
+                                <?php if ($purgeIsSuperGlobal): ?>
+                                    <label for="dmConfirmAll">Then type <code>DELETE ALL</code> (wipes every department)</label>
+                                    <input type="text" id="dmConfirmAll" name="confirm_all" autocomplete="off" placeholder="DELETE ALL">
+                                <?php endif; ?>
+                                <div class="dm-modal-actions">
+                                    <button type="button" class="btn-ghost" id="dmCancelBtn">Cancel</button>
+                                    <button type="submit" class="btn-danger-solid" id="dmSubmitBtn" disabled>
+                                        <i class="bi bi-trash3"></i> Delete permanently
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
+    <script>
+        (function () {
+            var modal   = document.getElementById('dmModal');
+            var openBtn = document.getElementById('dmOpenBtn');
+            if (!modal || !openBtn) return;
+
+            var closeEls = [document.getElementById('dmCloseBtn'), document.getElementById('dmCancelBtn')];
+            var confirmA = document.getElementById('dmConfirm');
+            var confirmB = document.getElementById('dmConfirmAll'); // only present for the global case
+            var submit   = document.getElementById('dmSubmitBtn');
+
+            function evaluate() {
+                var ok = confirmA && confirmA.value.trim() === 'DELETE';
+                if (confirmB) ok = ok && confirmB.value.trim() === 'DELETE ALL';
+                submit.disabled = !ok;
+            }
+            function open() {
+                modal.hidden = false;
+                if (confirmA) { confirmA.value = ''; }
+                if (confirmB) { confirmB.value = ''; }
+                evaluate();
+                if (confirmA) confirmA.focus();
+                document.addEventListener('keydown', onKey);
+            }
+            function close() {
+                modal.hidden = true;
+                document.removeEventListener('keydown', onKey);
+                openBtn.focus();
+            }
+            function onKey(e) { if (e.key === 'Escape') close(); }
+
+            openBtn.addEventListener('click', open);
+            closeEls.forEach(function (el) { if (el) el.addEventListener('click', close); });
+            modal.addEventListener('click', function (e) { if (e.target === modal) close(); });
+            if (confirmA) confirmA.addEventListener('input', evaluate);
+            if (confirmB) confirmB.addEventListener('input', evaluate);
+        })();
+    </script>
 </body>
 </html>

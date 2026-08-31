@@ -12,28 +12,31 @@ require_once __DIR__ . '/../includes/bootstrap.php';
 require_login();
 require_department();
 
-$me    = current_faculty();
-$game  = trim((string)($_GET['game'] ?? ''));
-$event = trim((string)($_GET['event'] ?? ''));
-$ay    = trim((string)($_GET['ay'] ?? ''));
+$me     = current_faculty();
+$game   = trim((string)($_GET['game'] ?? ''));
+$event  = trim((string)($_GET['event'] ?? ''));
+$ay     = trim((string)($_GET['ay'] ?? ''));
+$gender = trim((string)($_GET['gender'] ?? ''));
+if (!array_key_exists($gender, gender_list_options())) $gender = '';
 
-if ($game === '' || $event === '') {
-    flash_set('jersey_error', 'Game and event are required.', 'error');
+if ($game === '' || $event === '' || $gender === '') {
+    flash_set('jersey_error', 'Gender, game, and event are required.', 'error');
     redirect('jersey_manage.php');
 }
 
 $ay_val = $ay === '' ? null : $ay;
 $dept_id = jersey_forms_has_department_id()
-    ? jersey_department_for_team($game, $event, $ay_val)
+    ? jersey_department_for_team($game, $event, $ay_val, $gender)
     : null;
 [$dept_filter, $dept_params, $dept_types] = jersey_form_department_filter($dept_id);
+[$gender_filter, $gender_params, $gender_types] = jersey_form_gender_filter($gender);
 
 // Load the form
 $form = db_one(
     "SELECT id FROM jersey_forms
-      WHERE game_name = ? AND event_label = ? AND academic_year <=> ? $dept_filter",
-    array_merge([$game, $event, $ay_val], $dept_params),
-    'sss' . $dept_types
+      WHERE game_name = ? AND event_label = ? AND academic_year <=> ? $dept_filter $gender_filter",
+    array_merge([$game, $event, $ay_val], $dept_params, $gender_params),
+    'sss' . $dept_types . $gender_types
 );
 
 if (!$form) {
@@ -59,13 +62,15 @@ $rows = db_select(
 if (empty($rows)) {
     flash_set('jersey_error', 'No approved jersey requests to export.', 'error');
     redirect('jersey_manage.php?' . http_build_query(array_filter([
-        'game' => $game, 'event' => $event, 'ay' => $ay, 'dept' => $dept_id,
+        'game' => $game, 'event' => $event, 'ay' => $ay, 'gender' => $gender, 'dept' => $dept_id,
     ], static fn($value) => $value !== null && $value !== '')));
 }
 
 // Generate CSV
+$genderLabel = gender_list_options()[$gender] ?? '';
 $filename = 'Jersey_Order_' . preg_replace('/[^A-Za-z0-9_\-]/', '_', $game)
           . '_' . preg_replace('/[^A-Za-z0-9_\-]/', '_', $event)
+          . ($genderLabel !== '' ? '_' . $genderLabel : '')
           . '_' . date('Ymd') . '.csv';
 
 header('Content-Type: text/csv; charset=utf-8');

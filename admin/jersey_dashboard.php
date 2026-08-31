@@ -23,10 +23,11 @@ $scope  .= $visible[0];
 $params  = array_merge($params, $visible[1]);
 $types  .= $visible[2];
 $dept_id = jersey_request_department_id();
-$jersey_dept_join = jersey_forms_has_department_id() ? ' AND jf.department_id = s.department_id' : '';
+$jersey_dept_join   = jersey_forms_has_department_id() ? ' AND jf.department_id = s.department_id' : '';
+$jersey_gender_join = jersey_forms_has_gender() ? ' AND jf.gender <=> ft.gender' : '';
 
 $teams = db_select(
-    "SELECT ft.game_name, ft.event_label, ft.academic_year,
+    "SELECT ft.game_name, ft.event_label, ft.academic_year, ft.gender,
             COUNT(DISTINCT ft.student_id) AS player_count,
             jf.id AS form_id,
             COALESCE(jf.is_open, 0) AS is_open,
@@ -42,11 +43,12 @@ $teams = db_select(
         AND jf.event_label = ft.event_label
         AND jf.academic_year <=> ft.academic_year
         $jersey_dept_join
+        $jersey_gender_join
        LEFT JOIN jersey_requests jr
          ON jr.jersey_form_id = jf.id
         AND jr.student_id = s.id
       WHERE 1=1 $scope
-      GROUP BY ft.game_name, ft.event_label, ft.academic_year, jf.id, jf.is_open
+      GROUP BY ft.game_name, ft.event_label, ft.academic_year, ft.gender, jf.id, jf.is_open
       ORDER BY last_added DESC, ft.game_name, ft.event_label",
     $params,
     $types
@@ -134,7 +136,21 @@ foreach ($teams as $team) {
         .btn-manage:hover{background:var(--primary-navy-dark);color:#fff}
         .empty-row{text-align:center;color:var(--medium-gray);padding:3rem 1rem;font-size:.9rem}
         .empty-row i{font-size:2.4rem;display:block;margin-bottom:.5rem;color:var(--light-gray)}
-        @media(max-width:992px){.sidebar{position:fixed;left:-280px;top:0;height:100vh;z-index:1050}.content-body{padding:1.25rem}.top-bar{padding:.75rem 1.25rem}}
+        @media(max-width:992px){
+            .sidebar{position:fixed;left:-280px;top:0;height:100vh;transition:left .3s ease;z-index:1050}
+            .sidebar.open{left:0}
+            .top-bar{padding:.75rem 1.25rem}
+            .content-body{padding:1.25rem}
+            .stat-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+            .data-card { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            .data-table { min-width: 600px; }
+        }
+        @media(max-width:576px){
+            .content-body { padding: 1rem 0.75rem; }
+            .stat-grid { gap: 0.75rem; }
+            .stat-card { padding: 0.85rem 1rem; }
+            .data-card-header { padding: 0.75rem 1rem; }
+        }
     </style>
 </head>
 <body>
@@ -149,14 +165,15 @@ foreach ($teams as $team) {
         </div>
         <nav class="sidebar-nav">
             <div class="sidebar-nav-label">Main</div>
-            <a href="dashboard.php"><i class="bi bi-speedometer2"></i> <span>Dashboard</span></a>
             <?php if (has_multiple_departments()): ?>
                 <a href="../faculty-select.php?change=1"><i class="bi bi-building"></i> <span>Select Faculty</span></a>
             <?php endif; ?>
+            <a href="dashboard.php"><i class="bi bi-speedometer2"></i> <span>Dashboard</span></a>
             <a href="../student-search.php"><i class="bi bi-search"></i> <span>Search Students</span></a>
             <a href="../student-profile.php?new=1"><i class="bi bi-person-plus"></i> <span>Add Student</span></a>
             <a href="provisional_list.php"><i class="bi bi-clipboard-check"></i> <span>Provisional Players</span></a>
             <a href="final_list.php"><i class="bi bi-check-all"></i> <span>Final Teams</span></a>
+            <a href="eligibility_archive.php"><i class="bi bi-folder2-open"></i> <span>Eligibility Archive</span></a>
             <a href="jersey_dashboard.php" class="active"><i class="bi bi-person-badge"></i> <span>Jersey Kit</span></a>
             <?php if (($me['role'] ?? '') === 'SUPER_ADMIN'): ?>
                 <div class="sidebar-nav-label">Site Content</div>
@@ -235,16 +252,19 @@ foreach ($teams as $team) {
                             <tbody>
                             <?php foreach ($teams as $team): ?>
                                 <?php
+                                $team_gender = $team['gender'] ?? '';
+                                $team_gender_label = gender_list_options()[$team_gender] ?? 'Unspecified';
                                 $query = http_build_query(array_filter([
                                     'game' => $team['game_name'],
                                     'event' => $team['event_label'],
                                     'ay' => $team['academic_year'] ?? '',
+                                    'gender' => $team_gender,
                                     'dept' => $dept_id,
                                 ], static fn($value) => $value !== null && $value !== ''));
                                 ?>
                                 <tr>
                                     <td>
-                                        <div class="team-name"><?= h($team['game_name']) ?></div>
+                                        <div class="team-name"><?= h($team['game_name']) ?> <span class="count-pill" style="background:rgba(26,54,93,.1);color:var(--primary-navy)"><?= h($team_gender_label) ?></span></div>
                                         <div class="team-meta">
                                             <?= h($team['event_label']) ?>
                                             <?= !empty($team['academic_year']) ? ' · ' . h($team['academic_year']) : '' ?>

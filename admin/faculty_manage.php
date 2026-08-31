@@ -189,6 +189,21 @@ if ($action === 'edit' && $id > 0) {
         .form-group input,.form-group select{padding:.55rem .75rem;border:1px solid var(--light-gray);border-radius:6px;font-family:inherit;font-size:.92rem;background:#fff}
         .form-group input:focus,.form-group select:focus{outline:none;border-color:var(--primary-navy)}
         .form-actions{display:flex;gap:.75rem;margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--light-gray)}
+        @media(max-width:992px){
+            .sidebar{position:fixed;left:-280px;top:0;height:100vh;transition:left .3s ease;z-index:1050}
+            .sidebar.open{left:0}
+            .top-bar{padding:.75rem 1.25rem}
+            .content-body{padding:1.25rem}
+            .btn { width: 100%; justify-content: center; }
+            .data-card { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            .data-table { min-width: 600px; }
+            .form-grid { grid-template-columns: 1fr; }
+            .form-actions { flex-direction: column; }
+        }
+        @media(max-width:576px){
+            .content-body { padding: 1rem 0.75rem; }
+            .form-card { padding: 1rem; }
+        }
     </style>
 </head>
 <body>
@@ -208,6 +223,7 @@ if ($action === 'edit' && $id > 0) {
                 <a href="../student-profile.php?new=1"><i class="bi bi-person-plus"></i> <span>Add Student</span></a>
                 <a href="provisional_list.php"><i class="bi bi-clipboard-check"></i> <span>Provisional Players</span></a>
                 <a href="final_list.php"><i class="bi bi-check-all"></i> <span>Final Teams</span></a>
+                <a href="eligibility_archive.php"><i class="bi bi-folder2-open"></i> <span>Eligibility Archive</span></a>
                 <a href="jersey_dashboard.php"><i class="bi bi-person-badge"></i> <span>Jersey Kit</span></a>
                 <div class="sidebar-nav-label">Site Content</div>
                 <a href="notices_list.php"><i class="bi bi-megaphone"></i> <span>Notices</span></a>

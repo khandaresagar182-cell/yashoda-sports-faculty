@@ -171,8 +171,12 @@ $columns = [
     'Sr. No.', 'Enrollment No.', 'Full Name', 'Gender', 'Date of Birth',
     'Blood Group', 'Email', 'Mobile', "Parent's Phone", 'Address',
     'Program / Branch', 'Academic Year', 'Year of Study',
-    'Primary Sport', 'Secondary Sport', 'Sports History', 'Achievements',
+    'Primary Sport', 'Secondary Sport',
 ];
+foreach (participation_levels() as $lvl) {
+    $columns[] = $lvl['label'];
+}
+$columns[] = 'Achievements';
 $col_header_row = '<Row ss:Height="30">';
 foreach ($columns as $col) {
     $col_header_row .= xml_cell($col, 'String', 'Header');
@@ -200,13 +204,23 @@ foreach ($rows as $r) {
     $data_rows .= xml_cell($r['study_year'] ?? '',    'String', 'Data');
     $data_rows .= xml_cell($r['sport_1'] ?? '', 'String', 'Data');
     $data_rows .= xml_cell($r['sport_2'] ?? '', 'String', 'Data');
-    $data_rows .= xml_cell($r['sports_history'] ?? '', 'String', 'Data');
+    foreach (participation_levels() as $lvl) {
+        $lvlVal = $r[$lvl['played_col']] ?? null;
+        $lvlText = (int)$lvlVal === 1
+            ? 'Yes' . (!empty($r[$lvl['year_col']]) ? ' — ' . $r[$lvl['year_col']] : '')
+            : 'No';
+        $data_rows .= xml_cell($lvlText, 'String', 'Data');
+    }
     $data_rows .= xml_cell($r['achievements'] ?? '', 'String', 'Data');
     $data_rows .= '</Row>';
 }
 
 // Column widths
-$widths = [55, 110, 180, 70, 100, 80, 180, 110, 110, 200, 180, 100, 90, 130, 130, 260, 260];
+$widths = [55, 110, 180, 70, 100, 80, 180, 110, 110, 200, 180, 100, 90, 130, 130];
+foreach (participation_levels() as $lvl) {
+    $widths[] = 150;
+}
+$widths[] = 260;
 $cols_xml = '';
 foreach ($widths as $i => $w) {
     $cols_xml .= '<Column ss:Index="' . ($i + 1) . '" ss:Width="' . $w . '"/>';

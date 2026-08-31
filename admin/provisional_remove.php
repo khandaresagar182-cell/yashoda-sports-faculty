@@ -18,11 +18,13 @@ $entry_id = (int)($_POST['entry_id'] ?? 0);
 $game     = trim((string)($_POST['game'] ?? ''));
 $event    = trim((string)($_POST['event'] ?? ''));
 $ay       = trim((string)($_POST['ay'] ?? '')) ?: null;
+$gender   = trim((string)($_POST['gender'] ?? ''));
 
 $back_params = http_build_query([
-    'game'  => $game,
-    'event' => $event,
-    'ay'    => $ay ?? '',
+    'game'   => $game,
+    'event'  => $event,
+    'ay'     => $ay ?? '',
+    'gender' => $gender,
 ]);
 $back_url = 'provisional_list.php' . ($back_params !== '' ? '?' . $back_params : '');
 

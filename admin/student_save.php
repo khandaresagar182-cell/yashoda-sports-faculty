@@ -29,6 +29,8 @@ $mobile_raw    = trim((string)($_POST['mobile']    ?? ''));
 $dob_raw       = trim((string)($_POST['dob']       ?? ''));
 $study_year_raw= trim((string)($_POST['study_year']?? ''));
 $mother_name_raw = trim((string)($_POST['mother_name'] ?? ''));
+$father_name_raw = trim((string)($_POST['father_name'] ?? ''));
+$aadhar_number   = preg_replace('/\D+/', '', (string)($_POST['aadhar_number'] ?? ''));
 
 $department = db_one('SELECT code FROM departments WHERE id = ? AND is_active = 1', [$dept_id], 'i');
 $is_engineering = ($department['code'] ?? '') === 'engineering';
@@ -39,8 +41,10 @@ $is_pharm_faculty_department = in_array(
     ['pharmacy', 'ytc_pharmacy', 'management', 'architecture'],
     true
 );
-$stores_roll_no = $is_polytechnic || $is_pharm_faculty_department;
-$stores_parent_name = $is_engineering || $is_pharm_faculty_department;
+$stores_roll_no = $is_polytechnic || $is_pharm_faculty_department || $is_engineering;
+// mother_name is collected for everyone except polytechnic/dpharm (which never
+// asks for it); father_name is separate and only exists for engineering/pharmacy.
+$stores_mother_name = $is_engineering || $is_pharm_faculty_department;
 
 // Required-field check (list every missing field by name in the error)
 $missing = [];
@@ -54,7 +58,13 @@ if ($mobile_raw === '')     $missing[] = 'Mobile No';
     if (strlen($address_raw) > 500) $missing[] = 'Address (max 500 characters)';
 if ($dob_raw === '')        $missing[] = 'Date of Birth';
 if ($study_year_raw === '') $missing[] = 'Year of Study';
-if ($uses_father_first_name && $mother_name_raw === '') $missing[] = 'Father First Name';
+if ($uses_father_first_name && $father_name_raw === '') $missing[] = "Father's First Name";
+// Aadhar prints on the Shivaji eligibility proforma (every dept except polytechnic).
+if (($department['code'] ?? '') !== 'polytechnic') {
+    if (!preg_match('/^[0-9]{12}$/', $aadhar_number)) $missing[] = 'Aadhar Number (12 digits)';
+} elseif ($aadhar_number !== '' && !preg_match('/^[0-9]{12}$/', $aadhar_number)) {
+    $missing[] = 'Aadhar Number (12 digits)';
+}
 // roll_no is optional for polytechnic and dpharm
 if ($missing) {
     flash_set('student_error', 'Required field(s) missing: ' . implode(', ', $missing) . '.', 'error');
@@ -80,9 +90,9 @@ if (!preg_match('/^[0-9]{10}$/', $mobile_raw)) {
 }
 if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $dob_raw, $dob_parts)
     || !checkdate((int)$dob_parts[2], (int)$dob_parts[3], (int)$dob_parts[1])
-    || $dob_raw < '1900-01-01'
+    || $dob_raw < '1995-01-01'
     || $dob_raw > date('Y-m-d')) {
-    flash_set('student_error', 'Date of Birth must be a valid date between 1900 and today.', 'error');
+    flash_set('student_error', 'Date of Birth must be a valid date between 1995 and today.', 'error');
     redirect($id > 0 ? '../student-profile.php?id=' . $id : '../student-profile.php?new=1');
 }
 if (!filter_var($email_raw, FILTER_VALIDATE_EMAIL)) {
@@ -119,8 +129,10 @@ $data = [
     'enrollment_no' => $enrollment_no,
     'roll_no'       => $stores_roll_no ? ($roll_no_raw !== '' ? $roll_no_raw : null) : null,
     'full_name'     => $full_name,
-    'mother_name'   => $stores_parent_name ? ($mother_name_raw !== '' ? $mother_name_raw : null) : null,
+    'mother_name'   => $stores_mother_name ? ($mother_name_raw !== '' ? $mother_name_raw : null) : null,
+    'father_name'   => $uses_father_first_name ? ($father_name_raw !== '' ? $father_name_raw : null) : null,
     'dob'           => ($_POST['dob'] ?? '') ?: null,
+    'aadhar_number' => $aadhar_number !== '' ? $aadhar_number : null,
     'gender'        => in_array($_POST['gender'] ?? '', gender_options(), true) ? $_POST['gender'] : null,
     'blood_group'   => in_array($_POST['blood_group'] ?? '', blood_options(), true) ? $_POST['blood_group'] : null,
     'email'         => trim((string)($_POST['email'] ?? '')) ?: null,
@@ -133,9 +145,15 @@ $data = [
     'sport_1'       => trim((string)($_POST['sport_1'] ?? '')) ?: null,
     'sport_2'       => trim((string)($_POST['sport_2'] ?? '')) ?: null,
     'achievements'  => trim((string)($_POST['achievements'] ?? '')) ?: null,
-    'sports_history'=> trim((string)($_POST['sports_history'] ?? '')) ?: null,
     'has_played_in_college' => isset($_POST['has_played_in_college']) && (int)$_POST['has_played_in_college'] === 1 ? 1 : 0,
 ];
+foreach (participation_levels() as $lvl) {
+    $lvlRaw    = $_POST[$lvl['slug'] . '_played'] ?? '';
+    $lvlPlayed = in_array((string)$lvlRaw, ['0', '1'], true) ? (int)$lvlRaw : null;
+    $lvlYearRaw = trim((string)($_POST[$lvl['slug'] . '_year'] ?? ''));
+    $data[$lvl['played_col']] = $lvlPlayed;
+    $data[$lvl['year_col']]   = ($lvlPlayed === 1 && $lvlYearRaw !== '') ? $lvlYearRaw : null;
+}
 
 if ($id > 0) {
     // UPDATE — must be in scope
@@ -151,9 +169,14 @@ if ($id > 0) {
     }
 
     $sql = 'UPDATE students SET
-        enrollment_no=?, roll_no=?, full_name=?, mother_name=?, dob=?, gender=?, blood_group=?, email=?, mobile=?,
+        enrollment_no=?, roll_no=?, full_name=?, mother_name=?, father_name=?, dob=?, aadhar_number=?, gender=?, blood_group=?, email=?, mobile=?,
         address=?, department_id=?, program=?, academic_year=?, study_year=?,
-        sport_1=?, sport_2=?, achievements=?, sports_history=?, has_played_in_college=?, photo_path=?
+        sport_1=?, sport_2=?, achievements=?, has_played_in_college=?,
+        zonal_played=?, zonal_year=?, interzonal_played=?, interzonal_year=?,
+        all_india_played=?, all_india_year=?,
+        west_zone_played=?, west_zone_year=?,
+        krida_mahotsav_played=?, krida_mahotsav_year=?,
+        photo_path=?
       WHERE id=?';
     $params = array_values($data);
     $params[] = $photo_path;
@@ -190,15 +213,27 @@ if ($id > 0) {
     $final_id = $id;
 } else {
     // INSERT
+    // Faculty-created students need login credentials too (self-registered
+    // students get theirs in register_process.php) — same DOB-derived
+    // scheme (DDMMYYYY), so both paths behave identically at first login.
+    $plaintext_password = dob_to_password($dob_raw);
+    $password_hash = $plaintext_password !== null ? password_hash($plaintext_password, PASSWORD_BCRYPT) : null;
+
     $sql = 'INSERT INTO students
-        (enrollment_no, roll_no, full_name, mother_name, dob, gender, blood_group, email, mobile,
+        (enrollment_no, roll_no, full_name, mother_name, father_name, dob, aadhar_number, gender, blood_group, email, mobile,
          address, department_id, program, academic_year, study_year,
-         sport_1, sport_2, achievements, sports_history, has_played_in_college, photo_path, created_by)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
+         sport_1, sport_2, achievements, has_played_in_college,
+         zonal_played, zonal_year, interzonal_played, interzonal_year,
+         all_india_played, all_india_year,
+         west_zone_played, west_zone_year,
+         krida_mahotsav_played, krida_mahotsav_year,
+         photo_path, password_hash, created_by)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
     // Get the newly inserted student ID
     $me = current_faculty();
     $params = array_values($data);
     $params[] = $photo_path;
+    $params[] = $password_hash;
     $params[] = $me['id'];
     $new_id = db_insert($sql, $params);
     $final_id = $new_id;
@@ -217,7 +252,15 @@ if ($id > 0) {
         db_execute('UPDATE students SET achievements = NULL WHERE id = ?', [$new_id], 'i');
     }
 
-    flash_set('student_saved', 'Student added successfully.', 'success');
+    // Email the new login credentials (best-effort — see includes/mailer.php).
+    $emailed = false;
+    if ($new_id > 0 && $plaintext_password !== null && !empty($data['email'])) {
+        $emailed = send_student_credentials_email((string)$data['email'], $full_name, (string)$data['email'], $plaintext_password);
+    }
+
+    flash_set('student_saved',
+        'Student added successfully.' . ($emailed ? ' Login credentials were emailed to ' . $data['email'] . '.' : ''),
+        'success');
 }
 
 // Handle Department-Specific Document Uploads
@@ -282,7 +325,6 @@ if ($final_id > 0) {
         [$dept_id], 'i'
     );
     if (!empty($catalog_rows)) {
-        $max_picks = (int)$catalog_rows[0]['max_picks'];
         $codes = array_column($catalog_rows, 'game_code');
         $codes_set = array_flip(array_map('strval', $codes));
 
@@ -297,8 +339,8 @@ if ($final_id > 0) {
         }
 
         $err = null;
-        if (count($posted) !== $max_picks) {
-            $err = "Please select exactly {$max_picks} games.";
+        if (count($posted) < 1) {
+            $err = 'Please select at least 1 game.';
         } elseif (count($posted) !== count(array_unique($posted))) {
             $err = 'Duplicate game selections are not allowed.';
         } else {

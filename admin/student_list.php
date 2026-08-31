@@ -131,7 +131,21 @@ $rows = db_select(
         .empty-row i{font-size:2.5rem;display:block;margin-bottom:.5rem;color:var(--light-gray)}
         .alert-banner{padding:.8rem 1rem;border-radius:8px;margin-bottom:1.25rem;font-size:.9rem;display:flex;align-items:center;gap:.5rem}
         .alert-banner.success{background:rgba(25,135,84,.1);color:#0a3622;border:1px solid rgba(25,135,84,.2)}
-        .alert-banner.error{background:rgba(220,53,69,.1);color:#842029;border:1px solid rgba(220,53,69,.2)}
+        @media(max-width:992px){
+            .sidebar{position:fixed;left:-280px;top:0;height:100vh;transition:left .3s ease;z-index:1050}
+            .sidebar.open{left:0}
+            .top-bar{padding:.75rem 1.25rem}
+            .content-body{padding:1.25rem}
+            .search-form { flex-direction: column; align-items: stretch; gap: 0.75rem; }
+            .search-form .form-group { width: 100%; flex: none; }
+            .btn { width: 100%; justify-content: center; }
+            .data-card { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            .data-table { min-width: 600px; }
+        }
+        @media(max-width:576px){
+            .content-body { padding: 1rem 0.75rem; }
+            .search-form { padding: 1rem; }
+        }
     </style>
 </head>
 <body>
@@ -146,16 +160,17 @@ $rows = db_select(
             </div>
             <nav class="sidebar-nav">
                 <div class="sidebar-nav-label">Main</div>
-                <a href="dashboard.php"><i class="bi bi-speedometer2"></i> <span>Dashboard</span></a>
                 <?php if (has_multiple_departments()): ?>
                     <a href="../faculty-select.php?change=1">
                         <i class="bi bi-building"></i> <span>Select Faculty</span>
                     </a>
                 <?php endif; ?>
+                <a href="dashboard.php"><i class="bi bi-speedometer2"></i> <span>Dashboard</span></a>
                 <a href="../student-search.php" class="active"><i class="bi bi-search"></i> <span>Search Students</span></a>
                 <a href="../student-profile.php?new=1"><i class="bi bi-person-plus"></i> <span>Add Student</span></a>
                 <a href="provisional_list.php"><i class="bi bi-clipboard-check"></i> <span>Provisional Players</span></a>
                 <a href="final_list.php"><i class="bi bi-check-all"></i> <span>Final Teams</span></a>
+                <a href="eligibility_archive.php"><i class="bi bi-folder2-open"></i> <span>Eligibility Archive</span></a>
                 <a href="jersey_dashboard.php"><i class="bi bi-person-badge"></i> <span>Jersey Kit</span></a>
                 <?php if (($me['role'] ?? '') === 'SUPER_ADMIN'): ?>
                     <div class="sidebar-nav-label">Site Content</div>

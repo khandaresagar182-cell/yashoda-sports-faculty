@@ -29,10 +29,12 @@ if ($game === '' && $new_game !== '') {
 }
 $event    = trim((string)($_GET['event'] ?? ''));
 $ay       = trim((string)($_GET['ay'] ?? ''));
+$gender   = trim((string)($_GET['gender'] ?? ''));
+if (!array_key_exists($gender, gender_list_options())) $gender = '';
 $q        = trim((string)($_GET['q'] ?? ''));
 $page     = max(1, (int)($_GET['page'] ?? 1));
 $per      = 8;
-$has_list = ($game !== '' && $event !== '');
+$has_list = ($game !== '' && $event !== '' && $gender !== '');
 
 // ---- distinct game names (from final_teams) ----
 [$gscope, $gp, $gt] = scope_sql_department('s');
@@ -50,15 +52,26 @@ $existing_games = db_select(
     $gp, $gt
 );
 
+// Games "belonging to" this faculty: the department's catalog
+// (dept_game_catalog). These populate the picker dropdown even before any
+// list exists. Any game already used in a saved list but missing from the
+// catalog is appended so historical lists stay reachable.
+$game_options = load_department_game_names(effective_department_id());
+foreach ($existing_games as $g) {
+    if (!in_array($g['game_name'], $game_options, true)) {
+        $game_options[] = $g['game_name'];
+    }
+}
+
 // ---- distinct saved final lists ----
 $saved_lists = db_select(
-    "SELECT ft.game_name, ft.event_label, ft.academic_year,
+    "SELECT ft.game_name, ft.event_label, ft.academic_year, ft.gender,
             COUNT(*) AS player_count,
             MAX(ft.created_at) AS last_added
        FROM final_teams ft
        JOIN students s ON s.id = ft.student_id
       WHERE 1=1 $gscope
-      GROUP BY ft.game_name, ft.event_label, ft.academic_year
+      GROUP BY ft.game_name, ft.event_label, ft.academic_year, ft.gender
       ORDER BY last_added DESC",
     $gp, $gt
 );
@@ -84,9 +97,10 @@ if ($has_list) {
           WHERE ft.game_name = ?
             AND ft.event_label = ?
             AND ft.academic_year <=> ?
+            AND ft.gender <=> ?
             $lscope
           ORDER BY ft.created_at ASC, s.enrollment_no ASC",
-        array_merge([$game, $event, $ay === '' ? null : $ay], $lp), 'sss' . $lt
+        array_merge([$game, $event, $ay === '' ? null : $ay, $gender], $lp), 'ssss' . $lt
     );
 }
 
@@ -101,9 +115,22 @@ if ($has_list) {
     $sscope .= $visible[0];
     $sp      = array_merge($sp, $visible[1]);
     $st     .= $visible[2];
-    $where    = "1=1 $sscope";
-    $params   = $sp;
-    $types    = $st;
+    // Only students matching the team's gender can be added to it.
+    $where    = "1=1 $sscope AND s.gender = ?";
+    $params   = array_merge($sp, [$gender]);
+    $types    = $st . 's';
+
+    // Restrict the add-pane to students who actually picked THIS game in
+    // their Step 3 sports selection. Only applies when the team's game is a
+    // catalogued game for this department — a free-text custom game has no
+    // picker data, so it keeps the old "show everyone" behaviour.
+    $picker_game_code = resolve_department_game_code(effective_department_id(), $game);
+    if ($picker_game_code !== null) {
+        $where   .= ' AND EXISTS (SELECT 1 FROM student_selected_games ssg
+                                   WHERE ssg.student_id = s.id AND ssg.game_code = ?) ';
+        $params[] = $picker_game_code;
+        $types   .= 's';
+    }
 
     if ($q !== '') {
         $where .= ' AND (s.enrollment_no LIKE ? OR s.full_name LIKE ?) ';
@@ -117,11 +144,13 @@ if ($has_list) {
          WHERE ft2.game_name = ?
            AND ft2.event_label = ?
            AND ft2.academic_year <=> ?
+           AND ft2.gender <=> ?
     ) ';
     $params[] = $game;
     $params[] = $event;
     $params[] = $ay === '' ? null : $ay;
-    $types   .= 'sss';
+    $params[] = $gender;
+    $types   .= 'ssss';
 
     $search_total = (int)(db_one(
         "SELECT COUNT(*) AS n FROM students s WHERE $where", $params, $types
@@ -144,8 +173,9 @@ if ($has_list) {
     );
 }
 
-$list_query = http_build_query(array_filter(['game' => $game, 'event' => $event, 'ay' => $ay]));
-$search_query = http_build_query(array_filter(['game' => $game, 'event' => $event, 'ay' => $ay, 'q' => $q]));
+$list_query = http_build_query(array_filter(['game' => $game, 'event' => $event, 'ay' => $ay, 'gender' => $gender]));
+$search_query = http_build_query(array_filter(['game' => $game, 'event' => $event, 'ay' => $ay, 'gender' => $gender, 'q' => $q]));
+$gender_label = gender_list_options()[$gender] ?? '';
 
 $flash_ok  = flash_get('final_saved');
 $flash_err = flash_get('final_error');
@@ -246,6 +276,23 @@ $flash_err = flash_get('final_error');
         .icon-remove{background:0 0;border:1px solid var(--light-gray);color:var(--medium-gray);width:30px;height:30px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:1rem;flex-shrink:0;text-decoration:none;transition:var(--transition-smooth)}
         .icon-remove:hover{background:rgba(220,53,69,.1);border-color:rgba(220,53,69,.3);color:#dc3545}
         .count-pill{display:inline-block;background:rgba(201,162,39,.15);color:var(--accent-gold);font-size:.72rem;font-weight:700;padding:.15rem .55rem;border-radius:10px;margin-left:.4rem}
+        @media(max-width:992px){
+            .sidebar{position:fixed;left:-280px;top:0;height:100vh;transition:left .3s ease;z-index:1050}
+            .sidebar.open{left:0}
+            .top-bar{padding:.75rem 1.25rem}
+            .content-body{padding:1.25rem}
+            .search-form { flex-direction: column; align-items: stretch; gap: 0.75rem; }
+            .search-form .form-group { width: 100%; flex: none; }
+            .btn { width: 100%; justify-content: center; }
+            .data-card { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            .data-table { min-width: 600px; }
+            .list-summary { flex-direction: column; align-items: flex-start; gap: 0.75rem; }
+            .list-summary .group { width: 100%; justify-content: space-between; }
+        }
+        @media(max-width:576px){
+            .content-body { padding: 1rem 0.75rem; }
+            .search-form { padding: 1rem; }
+        }
     </style>
 </head>
 <body>
@@ -260,16 +307,17 @@ $flash_err = flash_get('final_error');
             </div >
             <nav class="sidebar-nav">
                 <div class="sidebar-nav-label">Main</div>
-                <a href="dashboard.php"><i class="bi bi-speedometer2"></i> <span>Dashboard</span></a>
                 <?php if (has_multiple_departments()): ?>
                     <a href="../faculty-select.php?change=1">
                         <i class="bi bi-building"></i> <span>Select Faculty</span>
                     </a>
                 <?php endif; ?>
+                <a href="dashboard.php"><i class="bi bi-speedometer2"></i> <span>Dashboard</span></a>
                 <a href="../student-search.php"><i class="bi bi-search"></i> <span>Search Students</span></a>
                 <a href="../student-profile.php?new=1"><i class="bi bi-person-plus"></i> <span>Add Student</span></a>
                 <a href="provisional_list.php"><i class="bi bi-clipboard-check"></i> <span>Provisional Players</span></a>
                 <a href="final_list.php" class="active"><i class="bi bi-check-all"></i> <span>Final Teams</span></a>
+                <a href="eligibility_archive.php"><i class="bi bi-folder2-open"></i> <span>Eligibility Archive</span></a>
                 <a href="jersey_dashboard.php"><i class="bi bi-person-badge"></i> <span>Jersey Kit</span></a>
                 <?php if (($me['role'] ?? '') === 'SUPER_ADMIN'): ?>
                     <div class="sidebar-nav-label">Site Content</div>
@@ -324,6 +372,7 @@ $flash_err = flash_get('final_error');
                             <span><span class="label">Game</span><span class="value"><?= h($game) ?></span></span>
                             <span><span class="label">Event</span><span class="value"><?= h($event) ?></span></span>
                             <span><span class="label">AY</span><span class="value"><?= h($ay !== '' ? $ay : '—') ?></span></span>
+                            <span><span class="label">Gender</span><span class="value"><?= h($gender_label) ?></span></span>
                         </div>
                         <div class="group">
                             <a href="final_import.php?<?= h($list_query) ?>" class="btn btn-success">
@@ -337,12 +386,13 @@ $flash_err = flash_get('final_error');
                         <!-- LEFT: add students -->
                         <div class="data-card">
                             <div class="data-card-header">
-                                <h2><i class="bi bi-search"></i> &nbsp;Add students to this team</h2>
+                                <h2><i class="bi bi-search"></i> &nbsp;Add <?= h($gender_label) ?> students to this team</h2>
                             </div>
                             <form method="get" action="final_list.php" class="search-form" style="margin:0;border-radius:0;border-left:none;border-right:none">
                                 <input type="hidden" name="game" value="<?= h($game) ?>">
                                 <input type="hidden" name="event" value="<?= h($event) ?>">
                                 <input type="hidden" name="ay" value="<?= h($ay) ?>">
+                                <input type="hidden" name="gender" value="<?= h($gender) ?>">
                                 <div class="form-group" style="flex:2">
                                     <label for="q">Search</label>
                                     <input type="text" id="q" name="q" value="<?= h($q) ?>" placeholder="Enrollment number or name">
@@ -359,53 +409,55 @@ $flash_err = flash_get('final_error');
                                     <?php if (empty($search_rows)) echo "No available students found matching your criteria."; ?>
                                 </div>
                             <?php else: ?>
-                                <table class="data-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Student</th>
-                                            <th>Enrollment</th>
-                                            <th>Sports</th>
-                                            <th>Year</th>
-                                            <th></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                    <?php foreach ($search_rows as $r): ?>
-                                        <tr>
-                                            <td>
-                                                <div class="student-cell">
-                                                    <div class="student-avatar">
-                                                        <?php if (!empty($r['photo_path']) && is_file(__DIR__ . '/../' . $r['photo_path'])): ?>
-                                                            <img src="<?= h(url($r['photo_path'])) ?>" alt="">
-                                                        <?php else: ?>
-                                                            <?= h(initials($r['full_name'])) ?>
-                                                        <?php endif; ?>
+                                <form method="post" action="final_save.php" id="bulkAddForm">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="game_name" value="<?= h($game) ?>">
+                                    <input type="hidden" name="event_label" value="<?= h($event) ?>">
+                                    <input type="hidden" name="academic_year" value="<?= h($ay) ?>">
+                                    <input type="hidden" name="gender" value="<?= h($gender) ?>">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th style="width:36px"><input type="checkbox" id="selectAllStudents" title="Select all on this page"></th>
+                                                <th>Student</th>
+                                                <th>Enrollment</th>
+                                                <th>Sports</th>
+                                                <th>Year</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                        <?php foreach ($search_rows as $r): ?>
+                                            <tr>
+                                                <td><input type="checkbox" class="student-check" name="student_id[]" value="<?= (int)$r['id'] ?>"></td>
+                                                <td>
+                                                    <div class="student-cell">
+                                                        <div class="student-avatar">
+                                                            <?php if (!empty($r['photo_path']) && is_file(__DIR__ . '/../' . $r['photo_path'])): ?>
+                                                                <img src="<?= h(url($r['photo_path'])) ?>" alt="">
+                                                            <?php else: ?>
+                                                                <?= h(initials($r['full_name'])) ?>
+                                                            <?php endif; ?>
+                                                        </div>
+                                                        <div class="student-name"><?= h($r['full_name']) ?></div>
                                                     </div>
-                                                    <div class="student-name"><?= h($r['full_name']) ?></div>
-                                                </div>
-                                            </td>
-                                            <td><?= h($r['enrollment_no']) ?></td>
-                                            <td>
-                                                <?php if ($r['sport_1']): ?><span class="sport-tag"><?= h($r['sport_1']) ?></span><?php endif; ?>
-                                                <?php if ($r['sport_2']): ?><span class="sport-tag"><?= h($r['sport_2']) ?></span><?php endif; ?>
-                                            </td>
-                                            <td><?= h($r['academic_year']) ?> · <?= h($r['study_year']) ?></td>
-                                            <td>
-                                                <form method="post" action="final_save.php" style="display:inline">
-                                                    <?= csrf_field() ?>
-                                                    <input type="hidden" name="student_id" value="<?= (int)$r['id'] ?>">
-                                                    <input type="hidden" name="game_name" value="<?= h($game) ?>">
-                                                    <input type="hidden" name="event_label" value="<?= h($event) ?>">
-                                                    <input type="hidden" name="academic_year" value="<?= h($ay) ?>">
-                                                    <button type="submit" class="btn btn-primary" style="padding:.3rem .6rem;font-size:.78rem">
-                                                        <i class="bi bi-plus-circle"></i> Add
-                                                    </button>
-                                                </form>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                    </tbody>
-                                </table>
+                                                </td>
+                                                <td><?= h($r['enrollment_no']) ?></td>
+                                                <td>
+                                                    <?php if ($r['sport_1']): ?><span class="sport-tag"><?= h($r['sport_1']) ?></span><?php endif; ?>
+                                                    <?php if ($r['sport_2']): ?><span class="sport-tag"><?= h($r['sport_2']) ?></span><?php endif; ?>
+                                                </td>
+                                                <td><?= h($r['academic_year']) ?> · <?= h($r['study_year']) ?></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                    <div style="display:flex;align-items:center;justify-content:space-between;padding:.85rem 1.1rem;border-top:1px solid var(--light-gray);background:var(--off-white)">
+                                        <span id="selectedCount" style="font-size:.85rem;color:var(--medium-gray);font-weight:600">0 selected</span>
+                                        <button type="submit" class="btn btn-primary" id="addSelectedBtn" disabled>
+                                            <i class="bi bi-plus-circle"></i> Add Selected
+                                        </button>
+                                    </div>
+                                </form>
                                 <div class="pagination">
                                     <div class="info">Page <?= $page ?> of <?= $search_pages ?> · <?= $search_total ?> available</div>
                                     <div class="pages">
@@ -427,15 +479,20 @@ $flash_err = flash_get('final_error');
                         <div class="data-card">
                             <div class="data-card-header">
                                 <h2>
-                                    <i class="bi bi-check-circle-fill"></i> &nbsp;Final Roster
+                                    <i class="bi bi-check-circle-fill"></i> &nbsp;Final Roster — <?= h($gender_label) ?>
                                     <span class="count-pill"><?= count($list_rows) ?> player<?= count($list_rows) === 1 ? '' : 's' ?></span>
                                 </h2>
                                 <?php if ($list_rows): ?>
-                                    <?php if (in_array(($me['department_code'] ?? ''), ['polytechnic', 'engineering', 'pharmacy', 'ytc_pharmacy', 'dpharm', 'management', 'architecture'], true)): ?>
-                                        <a href="final_export_docx.php?<?= h($list_query) ?>" class="btn btn-primary">
-                                            <i class="bi bi-file-earmark-word"></i> Export Word
+                                    <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+                                        <a href="final_export_pdf.php?<?= h($list_query) ?>" class="btn btn-primary">
+                                            <i class="bi bi-file-earmark-pdf"></i> Export PDF
                                         </a>
-                                    <?php endif; ?>
+                                        <?php if (in_array(($me['department_code'] ?? ''), ['polytechnic', 'engineering', 'pharmacy', 'ytc_pharmacy', 'dpharm', 'management', 'architecture'], true)): ?>
+                                            <a href="final_export_docx.php?<?= h($list_query) ?>" class="btn btn-secondary">
+                                                <i class="bi bi-file-earmark-word"></i> Export Word
+                                            </a>
+                                        <?php endif; ?>
+                                    </div>
                                 <?php endif; ?>
                             </div>
                             <?php if (!$list_rows): ?>
@@ -467,6 +524,7 @@ $flash_err = flash_get('final_error');
                                             <input type="hidden" name="game" value="<?= h($game) ?>">
                                             <input type="hidden" name="event" value="<?= h($event) ?>">
                                             <input type="hidden" name="ay" value="<?= h($ay) ?>">
+                                            <input type="hidden" name="gender" value="<?= h($gender) ?>">
                                             <button type="submit" class="icon-remove" title="Remove">
                                                 <i class="bi bi-x-lg"></i>
                                             </button>
@@ -484,23 +542,40 @@ $flash_err = flash_get('final_error');
                             </div>
                             <form method="get" action="final_list.php" style="padding:1.25rem">
                                 <div class="form-group" style="margin-bottom:1rem">
+                                    <label for="gender">Gender</label>
+                                    <select id="gender" name="gender" required style="padding:.55rem .75rem;border:1px solid var(--light-gray);border-radius:6px;font-family:inherit;font-size:.9rem;background:var(--white);width:100%">
+                                        <option value="">— Select —</option>
+                                        <?php foreach (gender_list_options() as $gVal => $gLabel): ?>
+                                            <option value="<?= h($gVal) ?>" <?= $gender === $gVal ? 'selected' : '' ?>><?= h($gLabel) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <div style="font-size:.78rem;color:var(--medium-gray);margin-top:.4rem">
+                                        Men and Women get separate final teams, even for the same game/event.
+                                    </div>
+                                </div>
+                                <div class="form-group" style="margin-bottom:1rem">
                                     <label for="game">Game</label>
-                                    <?php if (!empty($existing_games)): ?>
+                                    <?php if (!empty($game_options)): ?>
                                         <select id="game" name="game" style="padding:.55rem .75rem;border:1px solid var(--light-gray);border-radius:6px;font-family:inherit;font-size:.9rem;background:var(--white);width:100%">
-                                            <option value="">— Pick an existing game —</option>
-                                            <?php foreach ($existing_games as $g): ?>
-                                                <option value="<?= h($g['game_name']) ?>"><?= h($g['game_name']) ?></option>
+                                            <option value="">— Select a game —</option>
+                                            <?php foreach ($game_options as $gname): ?>
+                                                <option value="<?= h($gname) ?>" <?= $game === $gname ? 'selected' : '' ?>><?= h($gname) ?></option>
                                             <?php endforeach; ?>
                                         </select>
                                         <div style="font-size:.78rem;color:var(--medium-gray);margin-top:.4rem">
-                                            Or type a new one below.
+                                            Games for your department. Not listed? Type it below.
                                         </div>
                                     <?php endif; ?>
-                                    <input type="text" name="new_game" placeholder="<?= !empty($existing_games) ? 'Or type a new game name' : 'Game name (e.g. Cricket, Kho-Kho)' ?>" style="margin-top:.5rem;padding:.55rem .75rem;border:1px solid var(--light-gray);border-radius:6px;font-family:inherit;font-size:.9rem;background:var(--white);width:100%">
+                                    <input type="text" name="new_game" placeholder="<?= !empty($game_options) ? 'Or type another game name' : 'Game name (e.g. Cricket, Kho-Kho)' ?>" style="margin-top:.5rem;padding:.55rem .75rem;border:1px solid var(--light-gray);border-radius:6px;font-family:inherit;font-size:.9rem;background:var(--white);width:100%">
                                 </div>
                                 <div class="form-group" style="margin-bottom:1rem">
-                                    <label for="event">Event label</label>
-                                    <input type="text" id="event" name="event" placeholder="<?= h('e.g. Zonal ' . current_academic_year()) ?>" required style="padding:.55rem .75rem;border:1px solid var(--light-gray);border-radius:6px;font-family:inherit;font-size:.9rem;background:var(--white);width:100%">
+                                    <label for="event">Event</label>
+                                    <select id="event" name="event" required style="padding:.55rem .75rem;border:1px solid var(--light-gray);border-radius:6px;font-family:inherit;font-size:.9rem;background:var(--white);width:100%">
+                                        <option value="">— Select —</option>
+                                        <?php foreach (['Zonal', 'Interzonal'] as $evOpt): ?>
+                                            <option value="<?= h($evOpt) ?>" <?= $event === $evOpt ? 'selected' : '' ?>><?= h($evOpt) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
                                 </div>
                                 <div class="form-group" style="margin-bottom:1rem">
                                     <label for="ay">Academic year</label>
@@ -532,16 +607,19 @@ $flash_err = flash_get('final_error');
                             <?php else: ?>
                                 <?php foreach ($saved_lists as $sl): ?>
                                     <?php
+                                        $sl_gender = $sl['gender'] ?? '';
+                                        $sl_gender_label = gender_list_options()[$sl_gender] ?? 'Unspecified';
                                         $open_url = 'final_list.php?' . http_build_query([
-                                            'game'  => $sl['game_name'],
-                                            'event' => $sl['event_label'],
-                                            'ay'    => $sl['academic_year'] ?? '',
+                                            'game'   => $sl['game_name'],
+                                            'event'  => $sl['event_label'],
+                                            'ay'     => $sl['academic_year'] ?? '',
+                                            'gender' => $sl_gender,
                                         ]);
                                         $count = (int)$sl['player_count'];
                                     ?>
                                     <div class="list-row">
                                         <div class="info">
-                                            <div class="name"><?= h($sl['game_name']) ?></div>
+                                            <div class="name"><?= h($sl['game_name']) ?> <span class="count-pill" style="background:rgba(26,54,93,.1);color:var(--primary-navy)"><?= h($sl_gender_label) ?></span></div>
                                             <div class="meta">
                                                 <?= h($sl['event_label']) ?>
                                                 · <?= h($sl['academic_year'] ?? '— Any —') ?>
@@ -560,5 +638,31 @@ $flash_err = flash_get('final_error');
             </div>
         </div>
     </div>
+    <script>
+    (function () {
+        var form = document.getElementById('bulkAddForm');
+        if (!form) return;
+        var selectAll = document.getElementById('selectAllStudents');
+        var checks    = Array.prototype.slice.call(form.querySelectorAll('.student-check'));
+        var countEl   = document.getElementById('selectedCount');
+        var addBtn    = document.getElementById('addSelectedBtn');
+
+        function refresh() {
+            var n = checks.filter(function (c) { return c.checked; }).length;
+            countEl.textContent = n + (n === 1 ? ' selected' : ' selected');
+            addBtn.disabled = n === 0;
+            if (selectAll) selectAll.checked = n > 0 && n === checks.length;
+        }
+
+        checks.forEach(function (c) { c.addEventListener('change', refresh); });
+        if (selectAll) {
+            selectAll.addEventListener('change', function () {
+                checks.forEach(function (c) { c.checked = selectAll.checked; });
+                refresh();
+            });
+        }
+        refresh();
+    })();
+    </script>
 </body>
 </html>

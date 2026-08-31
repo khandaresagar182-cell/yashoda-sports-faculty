@@ -1,13 +1,14 @@
 <?php
 /**
- * Delete an entire provisional list (all entries for a game + event + AY).
+ * Delete an entire provisional list (all entries for a game + event + AY + gender).
  *
  * POST only. CSRF protected. Department-scoped via JOIN to students.
  *
  * POST fields:
- *   game   string  (required)
- *   event  string  (required)
- *   ay     string  (optional, empty = NULL/Any)
+ *   game    string  (required)
+ *   event   string  (required)
+ *   ay      string  (optional, empty = NULL/Any)
+ *   gender  string  (optional, empty = NULL/legacy-unspecified)
  */
 declare(strict_types=1);
 
@@ -21,9 +22,10 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 require_login();
 csrf_check();
 
-$game  = trim((string)($_POST['game']  ?? ''));
-$event = trim((string)($_POST['event'] ?? ''));
-$ay    = trim((string)($_POST['ay']    ?? '')) ?: null;
+$game   = trim((string)($_POST['game']   ?? ''));
+$event  = trim((string)($_POST['event']  ?? ''));
+$ay     = trim((string)($_POST['ay']     ?? '')) ?: null;
+$gender = trim((string)($_POST['gender'] ?? '')) ?: null;
 
 // If game/event are missing, just bounce to the picker page.
 if ($game === '' || $event === '') {
@@ -39,9 +41,10 @@ $deleted = db_execute(
       WHERE pe.game_name = ?
         AND pe.event_label = ?
         AND pe.academic_year <=> ?
+        AND pe.gender <=> ?
         $scope",
-    array_merge([$game, $event, $ay], $p),
-    'sss' . $t
+    array_merge([$game, $event, $ay, $gender], $p),
+    'ssss' . $t
 );
 
 if ($deleted > 0) {
