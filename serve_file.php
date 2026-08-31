@@ -13,6 +13,11 @@
 
 declare(strict_types=1);
 
+// bootstrap gives us the session + db_one() for the access-control check
+// below. serve_file.php's request URI is not a "staff area" path, so
+// bootstrap's seed-check output buffering / sidebar injection stay dormant.
+require_once __DIR__ . '/includes/bootstrap.php';
+
 // Only serve from allowed upload buckets
 $allowed_buckets = ['documents', 'students', 'achievements', 'notices'];
 
@@ -32,6 +37,34 @@ if (count($parts) < 2 || !in_array($parts[0], $allowed_buckets, true)) {
     http_response_code(404);
     echo 'File not found.';
     exit;
+}
+
+// Access control (S1). `documents` and `students` hold student PII —
+// Aadhaar cards, bank passbooks, marksheets, passport photos. Require an
+// authenticated faculty session, or the student session that owns the file.
+// `notices` and `achievements` stay public: both are linked from the
+// public homepage (index.php).
+if (in_array($parts[0], ['documents', 'students'], true)) {
+    $faculty_id = (int)($_SESSION['faculty_id'] ?? 0);
+    $student_id = (int)($_SESSION['student_id'] ?? 0);
+    $authorized = false;
+
+    if ($faculty_id > 0) {
+        $authorized = true;                       // any signed-in faculty/admin
+    } elseif ($student_id > 0) {
+        $rel = 'uploads/' . $requested;           // canonical stored form
+        $sql = $parts[0] === 'students'
+            ? 'SELECT 1 FROM students WHERE id = ? AND photo_path = ?'
+            : 'SELECT 1 FROM student_documents WHERE student_id = ? AND file_path = ?';
+        $authorized = db_one($sql, [$student_id, $rel], 'is') !== null;
+    }
+
+    if (!$authorized) {
+        http_response_code(403);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo 'Forbidden.';
+        exit;
+    }
 }
 
 // Prevent path traversal — resolve real paths and verify containment
