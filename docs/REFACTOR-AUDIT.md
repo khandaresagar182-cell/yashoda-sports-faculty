@@ -111,6 +111,26 @@ Build scripts now exclude `docs/` and `_quarantine/`.
 | **S4** `session.use_strict_mode=0` | **needs decision** — recommend flip to `1` (pairs with the existing `session_regenerate_id(true)` on login; the DO-edge reason is gone on cPanel). Session change → wants go-ahead + a login test on live. |
 | **S5** logout via GET, no CSRF | **needs decision** — lowest severity (attacker can only sign you out). Clean fix = `?_csrf=` on 16 nav links + accept `$_GET['_csrf']` in `csrf_check()`. Recommend do-it or accept-as-is. |
 | **S6** `api/student_documents_status.php` inline auth | **reclassified: not a finding** — the inline `$_SESSION['student_id']` + `401 JSON` is the correct pattern for a JSON endpoint; `require_student()` would emit an HTML redirect. |
-| **S7** `/backups/*.sql` not blocked | open — add a `backups/.htaccess` deny-all (Phase 4 tail). |
-| **S8** TCPDF version unpinned | open — record the vendored version; no CVE check possible without it. |
+| **S7** `/backups/*.sql` not blocked / shipped by build | **done** — `backups/.htaccess` deny-all + `backups/` added to both build scripts' `/XD`. | `eecf046` |
+| **S8** TCPDF version unpinned | **recorded** — **TCPDF 6.6.2** (2023). Server-side PDF generation on app-controlled data only; no known critical CVE at that version. Update to 6.7.x when convenient — low priority. |
 | **D** debug scripts | **largely resolved by Phase 3** — 5 quarantined+deleted; build scripts no longer ship them. `db_setup.php` kept: token-gated (`DB_SETUP_TOKEN`, `hash_equals`) + refuses if `students` exists. Residual "token holder can wipe DB" is by design. |
+
+Phase 4 done: S1, S2, S3, S7, S8, D. Open: **S4** (session strict mode — your call), **S5** (logout CSRF — your call). S6 dismissed.
+
+### Phase 5 — migration consolidation — **deferred** (per your instruction)
+
+### Phase 6 — regression + rollback
+
+**Regression sweep** (logged in as `admin`, local XAMPP): 22 routes exercised — every page returns 200 / 302-as-designed, `api/student_documents_status.php` returns 401 as designed (student-only JSON API), `serve_file.php` gate verified (anon `documents`/`students` → 403, `notices`/`achievements` → public, traversal → blocked). `php -l` clean on all 82 PHP files. No 500s, no PHP warnings/notices anywhere.
+
+**Not covered** (needs a human + real data): student-side flows requiring a student login (wizard save, doc upload, own-photo fetch through the new `serve_file.php` gate); PDF/DOCX eligibility exports with real rows; anything on the live cPanel host.
+
+**Rollback**
+| Scope | How |
+|---|---|
+| Everything | `git reset --hard pre-refactor-baseline` |
+| Just the dead-code deletion | `git revert 9302cd7..be28e8d` (or checkout files from `9302cd7^`) |
+| Just one security fix | `git revert <that commit>` — each is standalone |
+| Database | restore `scratchpad/backup_pre_refactor_20260901-014709.sql` (local only; prod DB was never touched) |
+
+All work is on branch `refactor/cleanup-and-hardening`; `main` still points at the pre-refactor baseline (7 snapshot commits + tag). Nothing is deployed.
