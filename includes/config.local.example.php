@@ -23,8 +23,8 @@
 return [
     'DB_HOST' => 'localhost',
     'DB_PORT' => 3306,
-    'DB_NAME' => 'yashlnhl_csfportal',
-    'DB_USER' => 'yashlnhl_csfuser',
+    'DB_NAME' => 'YOUR_DB_NAME',   // e.g. <cpaneluser>_csfportal
+    'DB_USER' => 'YOUR_DB_USER',   // e.g. <cpaneluser>_csfuser
     'DB_PASS' => 'YOUR_PASSWORD_HERE',
 
     // Token required by db_setup.php to run the schema migrations.
