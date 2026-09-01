@@ -988,7 +988,9 @@ $wizard_steps = [
                     <?php
                         $gapYear = $student['has_gap_year'] ?? null;
                         $gapYearPersisted = ($gapYear === 0 || $gapYear === 1);
-                        if ($gapYear === null) $gapYear = 0;
+                        // $gapChoice: 0 or 1 for a saved answer, null for a new
+                        // student so neither Yes nor No renders pre-selected.
+                        $gapChoice = $gapYearPersisted ? (int)$gapYear : null;
                     ?>
                     <form method="post" action="student_dashboard_process.php?step=2" id="academicForm">
                         <?= csrf_field() ?>
@@ -1108,20 +1110,20 @@ $wizard_steps = [
                         <div class="form-group" data-required-group>
                             <label>Gap / Year Drop? <span class="req-star" aria-hidden="true">*</span></label>
                             <div class="yesno-group" role="radiogroup" aria-label="Gap / Year Drop?" aria-required="true">
-                                <label class="yesno-opt <?= (int)$gapYear === 1 ? 'selected' : '' ?>" data-val="1">
-                                    <input type="radio" name="has_gap_year_radio" value="1" <?= (int)$gapYear === 1 ? 'checked' : '' ?>>
+                                <label class="yesno-opt <?= $gapChoice === 1 ? 'selected' : '' ?>" data-val="1">
+                                    <input type="radio" name="has_gap_year_radio" value="1" <?= $gapChoice === 1 ? 'checked' : '' ?>>
                                     <span class="yesno-circle"></span>
                                     <span class="yesno-text">Yes</span>
                                 </label>
-                                <label class="yesno-opt <?= (int)$gapYear === 0 ? 'selected' : '' ?>" data-val="0">
-                                    <input type="radio" name="has_gap_year_radio" value="0" <?= (int)$gapYear === 0 ? 'checked' : '' ?>>
+                                <label class="yesno-opt <?= $gapChoice === 0 ? 'selected' : '' ?>" data-val="0">
+                                    <input type="radio" name="has_gap_year_radio" value="0" <?= $gapChoice === 0 ? 'checked' : '' ?>>
                                     <span class="yesno-circle"></span>
                                     <span class="yesno-text">No</span>
                                 </label>
                             </div>
                             <div class="hint yesno-error" id="gapYearError" style="display:none;color:#c53030;font-weight:600">Please choose Yes or No before continuing.</div>
                         </div>
-                        <div class="form-group" id="gapYearDetailGroup" style="<?= (int)$gapYear === 1 ? '' : 'display:none' ?>">
+                        <div class="form-group" id="gapYearDetailGroup" style="<?= $gapChoice === 1 ? '' : 'display:none' ?>">
                             <label for="gap_year_detail">Please Mention Year</label>
                             <input type="text" id="gap_year_detail" name="gap_year_detail" maxlength="100"
                                    placeholder="e.g. 2022"

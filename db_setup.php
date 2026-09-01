@@ -214,6 +214,7 @@ $files  = [
     'migration-v43-unified-game-catalog.sql',
     'migration-v44-bank-details.sql',
     'migration-v45-eligibility-archive.sql',
+    'migration-v46-heal-document-requirements.sql',
     'migration_student_auth.sql',
 ];
 
