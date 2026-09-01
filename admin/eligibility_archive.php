@@ -284,6 +284,7 @@ $yearLabel = static fn(string $ay): string => $ay === '' ? 'Unspecified' : $ay;
                     <a href="achievements_list.php"><i class="bi bi-trophy"></i> <span>Achievements</span></a>
                     <div class="sidebar-nav-label">Admin</div>
                     <a href="faculty_manage.php"><i class="bi bi-people-fill"></i> <span>Faculty Management</span></a>
+                    <a href="document_requirements.php"><i class="bi bi-file-earmark-ruled"></i> <span>Document Requirements</span></a>
                 <?php endif; ?>
                 <div class="sidebar-nav-label">Site</div>
                 <a href="../index.php"><i class="bi bi-globe"></i> <span>View Website</span></a>

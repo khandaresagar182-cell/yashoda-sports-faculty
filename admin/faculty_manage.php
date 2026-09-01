@@ -16,6 +16,34 @@ $id     = (int)($_GET['id'] ?? 0);
 $ok  = flash_get('faculty_saved');
 $err = flash_get('faculty_error');
 
+/** All departments a faculty login can be granted access to. */
+$departments = db_select('SELECT id, name FROM departments WHERE is_active = 1 ORDER BY display_order, id');
+
+/** Read + sanitise the posted department checkbox list. */
+function faculty_posted_dept_ids(): array
+{
+    return array_values(array_unique(array_filter(array_map('intval', (array)($_POST['department_ids'] ?? [])))));
+}
+
+/**
+ * Replace a faculty user's department grants with exactly $deptIds
+ * (validated against the departments table). Pass [] to clear all.
+ */
+function faculty_sync_departments(int $facultyId, array $deptIds): void
+{
+    db_execute('DELETE FROM faculty_departments WHERE faculty_id = ?', [$facultyId], 'i');
+    if (!$deptIds) return;
+    $ph    = implode(',', array_fill(0, count($deptIds), '?'));
+    $valid = db_select("SELECT id FROM departments WHERE id IN ($ph)", $deptIds, str_repeat('i', count($deptIds)));
+    foreach ($valid as $v) {
+        db_execute(
+            'INSERT INTO faculty_departments (faculty_id, department_id) VALUES (?, ?)',
+            [$facultyId, (int)$v['id']],
+            'ii'
+        );
+    }
+}
+
 /* ---------------- POST handlers ---------------- */
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -30,18 +58,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $phone     = trim((string)($_POST['phone']     ?? ''));
         $password  = (string)($_POST['password']      ?? '');
 
+        $dept_ids = faculty_posted_dept_ids();
+
         if ($username === '' || $email === '' || $full_name === '' || strlen($password) < 8) {
             flash_set('faculty_error', 'All fields required; password must be 8+ characters.', 'error');
             redirect('faculty_manage.php?action=new');
         }
+        if ($role === 'FACULTY' && !$dept_ids) {
+            flash_set('faculty_error', 'Assign the faculty login to at least one faculty / department.', 'error');
+            redirect('faculty_manage.php?action=new');
+        }
         $hash = password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
         try {
-            db_insert(
+            $new_faculty_id = db_insert(
                 'INSERT INTO faculty (username, email, full_name, password_hash, role, phone, is_active, must_reset_pw)
                  VALUES (?,?,?,?,?,?,1,1)',
                 [$username, $email, $full_name, $hash, $role, $phone ?: null],
                 'ssssss'
             );
+            faculty_sync_departments((int)$new_faculty_id, $role === 'FACULTY' ? $dept_ids : []);
             flash_set('faculty_saved', "Faculty '$username' created.", 'success');
             redirect('faculty_manage.php');
         } catch (Throwable $e) {
@@ -57,9 +92,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $is_active = isset($_POST['is_active']) ? 1 : 0;
         $role      = ($_POST['role'] ?? 'FACULTY') === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : 'FACULTY';
         $new_pw    = (string)($_POST['new_password'] ?? '');
+        $dept_ids  = faculty_posted_dept_ids();
 
         if ($full_name === '' || $email === '') {
             flash_set('faculty_error', 'Name and email are required.', 'error');
+            redirect("faculty_manage.php?action=edit&id=$id");
+        }
+        if ($role === 'FACULTY' && !$dept_ids) {
+            flash_set('faculty_error', 'Assign the faculty login to at least one faculty / department.', 'error');
             redirect("faculty_manage.php?action=edit&id=$id");
         }
 
@@ -76,7 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         db_execute(
             'UPDATE faculty SET full_name=?, email=?, phone=?, is_active=?, role=?, must_reset_pw=? WHERE id=?',
             [$full_name, $email, $phone ?: null, $is_active, $role, $new_pw !== '' ? 1 : 0, $id],
-            'sssiiii'
+            'sssisii'
         );
         if ($new_pw !== '') {
             if (strlen($new_pw) < 8) {
@@ -86,6 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $hash = password_hash($new_pw, PASSWORD_BCRYPT, ['cost' => 12]);
             db_execute('UPDATE faculty SET password_hash=? WHERE id=?', [$hash, $id], 'si');
         }
+        faculty_sync_departments($id, $role === 'FACULTY' ? $dept_ids : []);
         flash_set('faculty_saved', 'Faculty updated.', 'success');
         redirect('faculty_manage.php');
     }
@@ -115,11 +156,26 @@ $faculty_list = db_select(
        FROM faculty ORDER BY is_active DESC, role, username'
 );
 
+// faculty_id => ["Engineering", "Polytechnic", ...] for the list column.
+$assigned_by_faculty = [];
+foreach (db_select(
+    'SELECT fd.faculty_id, d.name
+       FROM faculty_departments fd
+       JOIN departments d ON d.id = fd.department_id
+      ORDER BY d.display_order, d.id'
+) as $a) {
+    $assigned_by_faculty[(int)$a['faculty_id']][] = $a['name'];
+}
+
 $edit_user = null;
+$edit_dept_ids = [];
 if ($action === 'edit' && $id > 0) {
     $edit_user = db_one('SELECT * FROM faculty WHERE id=?', [$id], 'i');
     if (!$edit_user) {
         http_response_code(404); exit('Faculty not found.');
+    }
+    foreach (db_select('SELECT department_id FROM faculty_departments WHERE faculty_id=?', [$id], 'i') as $r) {
+        $edit_dept_ids[] = (int)$r['department_id'];
     }
 }
 ?>
@@ -189,6 +245,13 @@ if ($action === 'edit' && $id > 0) {
         .form-group input,.form-group select{padding:.55rem .75rem;border:1px solid var(--light-gray);border-radius:6px;font-family:inherit;font-size:.92rem;background:#fff}
         .form-group input:focus,.form-group select:focus{outline:none;border-color:var(--primary-navy)}
         .form-actions{display:flex;gap:.75rem;margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--light-gray)}
+        .dept-check-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:.5rem;margin-top:.25rem}
+        .dept-check{display:flex;align-items:center;gap:.5rem;padding:.5rem .7rem;border:1px solid var(--light-gray);border-radius:6px;font-size:.9rem;font-weight:500;cursor:pointer;background:#fff;text-transform:none;letter-spacing:0}
+        .dept-check:hover{border-color:var(--primary-navy-light);background:var(--off-white)}
+        .dept-check input{width:auto;margin:0}
+        .faculties-cell{font-size:.82rem;color:var(--text-dark)}
+        .faculties-cell .all{color:var(--accent-maroon);font-weight:600}
+        .faculties-cell .none{color:var(--medium-gray);font-style:italic}
         @media(max-width:992px){
             .sidebar{position:fixed;left:-280px;top:0;height:100vh;transition:left .3s ease;z-index:1050}
             .sidebar.open{left:0}
@@ -230,6 +293,7 @@ if ($action === 'edit' && $id > 0) {
                 <a href="achievements_list.php"><i class="bi bi-trophy"></i> <span>Achievements</span></a>
                 <div class="sidebar-nav-label">Admin</div>
                 <a href="faculty_manage.php" class="active"><i class="bi bi-people-fill"></i> <span>Faculty Management</span></a>
+                <a href="document_requirements.php"><i class="bi bi-file-earmark-ruled"></i> <span>Document Requirements</span></a>
                 <div class="sidebar-nav-label">Site</div>
                 <a href="../index.php"><i class="bi bi-globe"></i> <span>View Website</span></a>
             </nav>
@@ -290,10 +354,25 @@ if ($action === 'edit' && $id > 0) {
                             </div>
                             <div class="form-group">
                                 <label>Role *</label>
-                                <select name="role" required>
+                                <select name="role" id="roleSelect" required>
                                     <option value="FACULTY" <?= ($edit_user['role'] ?? 'FACULTY') === 'FACULTY' ? 'selected' : '' ?>>Faculty</option>
                                     <option value="SUPER_ADMIN" <?= ($edit_user['role'] ?? '') === 'SUPER_ADMIN' ? 'selected' : '' ?>>Super Admin</option>
                                 </select>
+                            </div>
+                            <div class="form-group dept-assign" id="deptAssignGroup" style="grid-column:1/-1">
+                                <label>Assigned Faculties / Departments *</label>
+                                <div class="dept-check-grid">
+                                    <?php foreach ($departments as $d): ?>
+                                        <label class="dept-check">
+                                            <input type="checkbox" name="department_ids[]" value="<?= (int)$d['id'] ?>"
+                                                   <?= in_array((int)$d['id'], $edit_dept_ids, true) ? 'checked' : '' ?>>
+                                            <span><?= h($d['name']) ?></span>
+                                        </label>
+                                    <?php endforeach; ?>
+                                </div>
+                                <small style="color:var(--medium-gray);font-size:.78rem">
+                                    This login can access students of the ticked faculties. Not used for Super Admin (sees every faculty).
+                                </small>
                             </div>
                             <?php if ($action === 'edit'): ?>
                                 <div class="form-group">
@@ -330,6 +409,7 @@ if ($action === 'edit' && $id > 0) {
                                     <th>User</th>
                                     <th>Email</th>
                                     <th>Role</th>
+                                    <th>Faculties</th>
                                     <th>Status</th>
                                     <th>Last Login</th>
                                     <th></th>
@@ -344,6 +424,15 @@ if ($action === 'edit' && $id > 0) {
                                     </td>
                                     <td><?= h($u['email']) ?></td>
                                     <td><span class="role-badge <?= $u['role']==='SUPER_ADMIN' ? 'admin' : 'faculty' ?>"><?= h($u['role']) ?></span></td>
+                                    <td class="faculties-cell">
+                                        <?php if ($u['role'] === 'SUPER_ADMIN'): ?>
+                                            <span class="all">All faculties</span>
+                                        <?php elseif (!empty($assigned_by_faculty[(int)$u['id']])): ?>
+                                            <?= h(implode(', ', $assigned_by_faculty[(int)$u['id']])) ?>
+                                        <?php else: ?>
+                                            <span class="none">None assigned</span>
+                                        <?php endif; ?>
+                                    </td>
                                     <td>
                                         <span class="status-dot <?= $u['is_active'] ? 'active' : 'inactive' ?>"></span>
                                         <?= $u['is_active'] ? 'Active' : 'Disabled' ?>
@@ -373,5 +462,21 @@ if ($action === 'edit' && $id > 0) {
             </div>
         </div>
     </div>
+    <script>
+        (function () {
+            var role = document.getElementById('roleSelect');
+            var grp  = document.getElementById('deptAssignGroup');
+            if (!role || !grp) return;
+            function sync() {
+                var isFaculty = role.value === 'FACULTY';
+                grp.style.display = isFaculty ? '' : 'none';
+                grp.querySelectorAll('input[type=checkbox]').forEach(function (cb) {
+                    cb.disabled = !isFaculty;
+                });
+            }
+            role.addEventListener('change', sync);
+            sync();
+        })();
+    </script>
 </body>
 </html>

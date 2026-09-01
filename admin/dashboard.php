@@ -352,6 +352,9 @@ $flash = flash_get('dashboard_info');
                     <a href="faculty_manage.php">
                         <i class="bi bi-people-fill"></i> <span>Faculty Management</span>
                     </a>
+                    <a href="document_requirements.php">
+                        <i class="bi bi-file-earmark-ruled"></i> <span>Document Requirements</span>
+                    </a>
                 <?php endif; ?>
                 <div class="sidebar-nav-label">Site</div>
                 <a href="../index.php">

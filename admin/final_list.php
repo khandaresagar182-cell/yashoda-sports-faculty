@@ -327,6 +327,7 @@ $flash_err = flash_get('final_error');
                 <?php if ($me['role'] === 'SUPER_ADMIN'): ?>
                     <div class="sidebar-nav-label">Admin</div>
                     <a href="faculty_manage.php"><i class="bi bi-people-fill"></i> <span>Faculty Management</span></a>
+                    <a href="document_requirements.php"><i class="bi bi-file-earmark-ruled"></i> <span>Document Requirements</span></a>
                 <?php endif; ?>
                 <div class="sidebar-nav-label">Site</div>
                 <a href="../index.php"><i class="bi bi-globe"></i> <span>View Website</span></a>
@@ -492,6 +493,9 @@ $flash_err = flash_get('final_error');
                                                 <i class="bi bi-file-earmark-word"></i> Export Word
                                             </a>
                                         <?php endif; ?>
+                                        <a href="final_export_xlsx.php?<?= h($list_query) ?>" class="btn btn-secondary">
+                                            <i class="bi bi-file-earmark-excel"></i> Export Excel
+                                        </a>
                                     </div>
                                 <?php endif; ?>
                             </div>

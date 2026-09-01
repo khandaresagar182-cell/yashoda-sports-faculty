@@ -268,165 +268,149 @@ $wizard_steps = [
         .welcome-banner .gold { color: var(--accent-gold); }
 
         /* ============================================================
-           GOVERNMENT-STYLE STEP WIZARD — Large & Attractive
+           STEP WIZARD — clean, professional progress UI
            ============================================================ */
-        .wizard-card { background:#fff; border-radius:16px; box-shadow: 0 4px 24px rgba(26,54,93,.08), 0 1px 3px rgba(0,0,0,.04); padding:0; overflow:hidden; border:1px solid rgba(26,54,93,.06); }
-        .wizard-head { padding:1.6rem 2rem 1.1rem; border-bottom:1px solid var(--light-gray); background: linear-gradient(135deg, rgba(26,54,93,.02), rgba(26,54,93,.04)); }
-        .wizard-head h2 { font-size:1.15rem; font-weight:700; color: var(--primary-navy); margin:0 0 .35rem; display:flex; align-items:center; gap:.5rem; }
+        .wizard-card { background:#fff; border-radius:16px; box-shadow: 0 4px 24px rgba(26,54,93,.08), 0 1px 3px rgba(0,0,0,.04); padding:0; overflow:hidden; border:1px solid rgba(26,54,93,.08); }
+        .wizard-head { padding:1.5rem 2rem 1.1rem; border-bottom:1px solid var(--light-gray); background:#fff; }
+        .wizard-head h2 { font-size:1.2rem; font-weight:700; color: var(--primary-navy); margin:0 0 .35rem; display:flex; align-items:center; gap:.5rem; }
         .wizard-head p  { font-size:.88rem; color: var(--medium-gray); margin:0; line-height:1.5; }
         .wizard-body { padding:1.6rem 2rem 2rem; }
 
-        /* -- Pipeline Container -- */
+        /* -- Stepper container -- */
         .pipeline {
             display:flex; align-items:flex-start; justify-content:center;
-            gap:0; padding:2rem 2rem 1.8rem;
-            background: linear-gradient(180deg, #f0f4f8 0%, #f8fafc 100%);
-            border-bottom:2px solid var(--light-gray);
+            gap:0; padding:1.75rem 1.5rem 1.4rem;
+            background:#fff;
+            border-bottom:1px solid var(--light-gray);
             overflow-x:auto;
             position:relative;
         }
 
-        /* -- Step Item -- */
+        /* -- Step node -- */
         .pipeline-step {
             display:flex; flex-direction:column; align-items:center; gap:.5rem;
             padding:0; border:none; background:transparent;
             font-size:.82rem; font-weight:600; color: var(--medium-gray);
             white-space:nowrap; flex-shrink:0;
-            transition: all .3s cubic-bezier(.4,0,.2,1);
-            text-decoration:none; position:relative; min-width:90px;
+            transition: color .2s ease;
+            text-decoration:none; position:relative; min-width:88px;
             cursor:default;
         }
-        .pipeline-step:hover { transform: translateY(-2px); }
+        .pipeline-step[href] { cursor:pointer; }
+        .pipeline-step[href]:hover .num { border-color: var(--primary-navy-light); color: var(--primary-navy); }
 
-        /* -- Step Circle (Number) -- */
+        /* -- Step circle -- */
         .pipeline-step .num {
-            width:48px; height:48px; border-radius:50%;
+            width:42px; height:42px; border-radius:50%;
             background:#fff; color: var(--medium-gray);
             display:flex; align-items:center; justify-content:center;
-            font-size:1rem; font-weight:800;
-            border:3px solid #d1d5db;
-            transition: all .3s cubic-bezier(.4,0,.2,1);
+            font-size:.95rem; font-weight:800;
+            border:2px solid #d7dde5;
+            transition: background-color .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease;
             position:relative; z-index:2;
-            box-shadow: 0 2px 8px rgba(0,0,0,.06);
         }
+        .pipeline-step .num i { font-size:1.1rem; }
 
-        /* -- Step Label (below circle) -- */
         .pipeline-step .step-label {
             font-size:.82rem; font-weight:600; color: var(--medium-gray);
             text-align:center; line-height:1.3;
-            transition: all .3s ease;
         }
         .pipeline-step .step-sublabel {
             font-size:.68rem; font-weight:400; color: #9ca3af;
             text-align:center; margin-top:-.1rem;
         }
 
-        /* -- Step Icon (inside circle for done) -- */
-        .pipeline-step .num i { font-size:1.2rem; }
-
-        /* ---- DONE state ---- */
+        /* ---- DONE ---- */
         .pipeline-step.done .num {
-            background: linear-gradient(135deg, #059669, #10b981);
-            color:#fff; border-color:#059669;
-            box-shadow: 0 4px 12px rgba(5,150,105,.3);
+            background: #059669; color:#fff; border-color:#059669;
+            box-shadow: 0 2px 6px rgba(5,150,105,.22);
         }
-        .pipeline-step.done .step-label { color:#059669; }
-        .pipeline-step.done .step-sublabel { color:#6ee7b7; }
+        .pipeline-step.done .step-label { color:#047857; }
 
-        /* ---- CURRENT state ---- */
+        /* ---- CURRENT ---- */
         .pipeline-step.current .num {
-            background: linear-gradient(135deg, var(--primary-navy), var(--primary-navy-dark));
-            color:#fff; border-color: var(--primary-navy);
-            box-shadow: 0 6px 20px rgba(26,54,93,.35), 0 0 0 4px rgba(26,54,93,.1);
-            animation: pulse-step 2s ease-in-out infinite;
+            background: var(--primary-navy); color:#fff; border-color: var(--primary-navy);
+            box-shadow: 0 0 0 4px rgba(26,54,93,.12);
         }
-        .pipeline-step.current .step-label {
-            color: var(--primary-navy); font-weight:700;
-        }
+        .pipeline-step.current .step-label { color: var(--primary-navy); font-weight:700; }
         .pipeline-step.current .step-sublabel { color: var(--primary-navy-light); }
 
-        @keyframes pulse-step {
-            0%, 100% { box-shadow: 0 6px 20px rgba(26,54,93,.35), 0 0 0 4px rgba(26,54,93,.1); }
-            50%      { box-shadow: 0 6px 20px rgba(26,54,93,.35), 0 0 0 8px rgba(26,54,93,.06); }
-        }
-
-        /* -- Connector Line -- */
+        /* -- Connector between nodes -- */
         .pipeline-conn {
-            width:60px; height:4px; flex-shrink:0;
-            background: #d1d5db;
+            width:56px; height:3px; flex-shrink:0;
+            background: #dde2e8;
             border-radius:2px;
-            margin-top:22px; /* align to center of circle */
-            position:relative;
-            overflow:hidden;
+            margin-top:19px; /* align to circle centre */
+            transition: background-color .3s ease;
         }
-        .pipeline-conn.done {
-            background: linear-gradient(90deg, #059669, #10b981);
-            box-shadow: 0 1px 4px rgba(5,150,105,.25);
-        }
-        .pipeline-conn.done::after {
-            content:''; position:absolute; top:0; left:0;
-            width:100%; height:100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,.4), transparent);
-            animation: shimmer 2.5s ease-in-out infinite;
-        }
-        @keyframes shimmer {
-            0%   { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
-        }
+        .pipeline-conn.done { background: var(--primary-navy); }
 
-        /* -- Progress Summary Bar -- */
+        /* -- Progress summary bar -- */
         .pipeline-progress-bar {
             display:flex; align-items:center; justify-content:center;
-            gap:.5rem; padding:.55rem 1.2rem;
-            background: linear-gradient(135deg, rgba(26,54,93,.05), rgba(26,54,93,.02));
+            gap:.6rem; padding:.6rem 1.2rem;
+            background: var(--off-white);
             border-bottom:1px solid var(--light-gray);
             font-size:.78rem; color: var(--medium-gray);
         }
         .pipeline-progress-bar .progress-track {
-            flex:1; max-width:300px; height:6px;
+            flex:1; max-width:320px; height:6px;
             background:#e5e7eb; border-radius:3px; overflow:hidden;
         }
         .pipeline-progress-bar .progress-fill {
             height:100%; border-radius:3px;
-            background: linear-gradient(90deg, #059669, #10b981);
+            background: linear-gradient(90deg, var(--primary-navy-light), var(--primary-navy));
             transition: width .5s cubic-bezier(.4,0,.2,1);
         }
         .pipeline-progress-bar strong { color: var(--primary-navy); }
 
-        /* -- Mobile Responsive -- */
+        /* -- Mobile -- */
         @media (max-width: 720px) {
-            .pipeline { padding:1.4rem 1rem 1.2rem; gap:0; justify-content:flex-start; }
-            .pipeline-step { min-width:70px; }
-            .pipeline-step .num { width:38px; height:38px; font-size:.88rem; border-width:2px; }
-            .pipeline-step .step-label { font-size:.72rem; }
+            .pipeline { padding:1.3rem 1rem 1rem; justify-content:flex-start; }
+            .pipeline-step { min-width:64px; }
+            .pipeline-step .num { width:36px; height:36px; font-size:.85rem; }
+            .pipeline-step .step-label { font-size:.7rem; }
             .pipeline-step .step-sublabel { display:none; }
-            .pipeline-conn { width:30px; height:3px; margin-top:17px; }
+            .pipeline-conn { width:24px; margin-top:16px; }
             .wizard-head { padding:1.2rem 1.2rem .8rem; }
             .wizard-body { padding:1.2rem 1.2rem 1.4rem; }
         }
         @media (max-width: 480px) {
+            .pipeline-step { min-width:52px; }
             .pipeline-step .num { width:32px; height:32px; font-size:.78rem; }
-            .pipeline-step .step-label { font-size:.65rem; }
-            .pipeline-conn { width:18px; margin-top:14px; }
+            .pipeline-step .step-label { font-size:.62rem; }
+            .pipeline-conn { width:14px; margin-top:14px; }
         }
 
-        .form-grid { display:grid; grid-template-columns: 1fr 1fr; gap:.9rem 1.1rem; }
+        .form-grid { display:grid; grid-template-columns: 1fr 1fr; gap:1rem 1.1rem; }
         @media (max-width: 720px) { .form-grid { grid-template-columns: 1fr; } }
-        .form-group label { display:block; font-size:.78rem; font-weight:600; color: var(--primary-navy); margin-bottom:.4rem; text-transform:uppercase; letter-spacing:.3px; }
-        .form-group input, .form-group select, .form-group textarea { width:100%; padding:.65rem .75rem; border:2px solid var(--light-gray); border-radius:8px; font-family:inherit; font-size:.92rem; color: var(--text-dark); background:#fff; transition: var(--transition-smooth); outline:none; }
-        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--primary-navy); box-shadow: 0 0 0 3px rgba(26,54,93,.1); }
+        .form-group label { display:block; font-size:.82rem; font-weight:600; color: var(--primary-navy); margin-bottom:.4rem; letter-spacing:0; }
+        .form-group input, .form-group select, .form-group textarea { width:100%; padding:.65rem .8rem; border:1.5px solid #cdd5df; border-radius:8px; font-family:inherit; font-size:.92rem; color: var(--text-dark); background:#fff; transition: border-color .15s ease, box-shadow .15s ease; outline:none; }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--primary-navy); box-shadow: 0 0 0 3px rgba(26,54,93,.12); }
         .form-group input[readonly] { background: var(--off-white); color: var(--medium-gray); cursor:not-allowed; }
         .form-group textarea { min-height:80px; resize:vertical; }
-        .form-group .hint { font-size:.72rem; color: var(--medium-gray); margin-top:.3rem; }
-        .section-head { font-size:.88rem; font-weight:700; color: var(--primary-navy); margin:1.4rem 0 .9rem; padding-bottom:.5rem; border-bottom:1px solid var(--light-gray); display:flex; align-items:center; gap:.4rem; }
+        .form-group .hint { font-size:.74rem; color: var(--medium-gray); margin-top:.35rem; line-height:1.45; }
+        .form-group.has-error input, .form-group.has-error select, .form-group.has-error textarea { border-color:#c53030; box-shadow: 0 0 0 3px rgba(197,48,48,.12); }
+        .field-error { color:#c53030; font-size:.75rem; font-weight:600; margin-top:.35rem; display:flex; align-items:center; gap:.3rem; }
+        .section-head { font-size:.9rem; font-weight:700; color: var(--primary-navy); margin:1.5rem 0 .9rem; padding-bottom:.5rem; border-bottom:1px solid var(--light-gray); display:flex; align-items:center; gap:.4rem; }
+        .section-head:first-child { margin-top:0; }
         .section-head i { color: var(--accent-gold); }
 
-        .btn-save { background: linear-gradient(135deg, var(--primary-navy), var(--primary-navy-dark)); color:#fff; border:none; border-radius:8px; padding:.75rem 1.6rem; font-family:inherit; font-size:.92rem; font-weight:600; letter-spacing:.5px; text-transform:uppercase; cursor:pointer; transition: var(--transition-smooth); display:inline-flex; align-items:center; gap:.5rem; }
-        .btn-save:hover { background: linear-gradient(135deg, var(--primary-navy-light), var(--primary-navy)); transform: translateY(-1px); box-shadow: 0 4px 14px rgba(26,54,93,.3); }
-        .btn-cancel { background:#fff; color: var(--primary-navy); border:1px solid var(--light-gray); border-radius:8px; padding:.75rem 1.4rem; font-family:inherit; font-size:.92rem; font-weight:600; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:.5rem; }
-        .btn-next  { background: linear-gradient(135deg, #198754, #146c43); }
-        .btn-next:hover  { background: linear-gradient(135deg, #20c997, #198754); box-shadow: 0 4px 14px rgba(25,135,84,.3); }
-        .btn-back  { background:#fff; color: var(--primary-navy); border:1px solid var(--light-gray); }
+        .btn-save { background: var(--primary-navy); color:#fff; border:none; border-radius:8px; padding:.75rem 1.6rem; font-family:inherit; font-size:.9rem; font-weight:600; letter-spacing:.3px; cursor:pointer; transition: background-color .15s ease, box-shadow .15s ease, transform .15s ease; display:inline-flex; align-items:center; gap:.5rem; }
+        .btn-save:hover { background: var(--primary-navy-dark); transform: translateY(-1px); box-shadow: 0 4px 14px rgba(26,54,93,.28); }
+        .btn-cancel { background:#fff; color: var(--primary-navy); border:1px solid #cdd5df; border-radius:8px; padding:.75rem 1.4rem; font-family:inherit; font-size:.9rem; font-weight:600; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:.5rem; transition: background-color .15s ease, border-color .15s ease; }
+        .btn-cancel:hover { background: var(--off-white); border-color: var(--medium-gray); }
+        .btn-next  { background: #198754; }
+        .btn-next:hover  { background: #146c43; box-shadow: 0 4px 14px rgba(25,135,84,.28); }
+        .btn-back  { background:#fff; color: var(--primary-navy); border:1px solid #cdd5df; }
+
+        /* -- Unified step navigation bar -- */
+        .wizard-actions { margin-top:1.6rem; padding-top:1.2rem; border-top:1px solid var(--light-gray); display:flex; align-items:center; gap:.7rem; flex-wrap:wrap; }
+        .wizard-actions .btn-save, .wizard-actions .btn-next { margin-left:auto; }
+        @media (max-width: 560px) {
+            .wizard-actions { flex-direction:column-reverse; align-items:stretch; }
+            .wizard-actions .btn-save, .wizard-actions .btn-next, .wizard-actions .btn-cancel { width:100%; justify-content:center; margin-left:0; }
+        }
 
         .alert-banner { padding:.8rem 1rem; border-radius:8px; margin-bottom:1.25rem; font-size:.9rem; display:flex; align-items:center; gap:.5rem; }
         .alert-banner.success { background: rgba(25,135,84,.1); color:#0a3622; border:1px solid rgba(25,135,84,.2); }
@@ -434,71 +418,90 @@ $wizard_steps = [
         .alert-banner.warn { background: rgba(255,193,7,.1); color:#664d03; border:1px solid rgba(255,193,7,.2); }
         .alert-banner.info { background: rgba(13,110,253,.08); color:#052c65; border:1px solid rgba(13,110,253,.18); }
 
-        /* Official-style file upload rules panel (Step 5 — Documents) */
+        /* Step 5 — file upload rules: high-visibility callout so students
+           can't miss the size / format limits before they pick a file. */
         .upload-rules {
-            margin-top: 1rem;
-            border: 1px solid #d8dee6;
-            border-radius: 4px;
-            background: #fff;
+            margin-top: 1.1rem;
+            border: 1px solid #f0d98c;
+            border-left: 5px solid var(--accent-gold);
+            border-radius: 10px;
+            background: linear-gradient(180deg, #fffdf5, #fff8e6);
+            box-shadow: 0 4px 16px rgba(201,162,39,.16);
             overflow: hidden;
         }
         .upload-rules-head {
             display: flex;
             align-items: center;
-            gap: .45rem;
-            padding: .45rem .9rem;
-            border-bottom: 1px solid #e5e9ef;
-            color: #4a5568;
-            font-size: .78rem;
-            font-weight: 600;
-            letter-spacing: .03em;
-            text-transform: uppercase;
+            gap: .55rem;
+            padding: .75rem 1.1rem;
+            border-bottom: 1px solid #f2e4b3;
+            color: var(--primary-navy);
+            font-size: .95rem;
+            font-weight: 800;
+            letter-spacing: .01em;
         }
-        .upload-rules-head i { color: #6b7a8a; font-size: .9rem; }
+        .upload-rules-head i { color: var(--accent-gold); font-size: 1.2rem; }
         .upload-rules-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 0;
         }
         .upload-rule {
-            padding: .75rem .9rem;
-            border-right: 1px solid #e5e9ef;
+            padding: 1rem 1.1rem;
+            border-right: 1px solid #f2e4b3;
             display: flex;
             flex-direction: column;
-            gap: .25rem;
+            gap: .55rem;
         }
         .upload-rule:last-child { border-right: 0; }
         .upload-rule-label {
-            font-size: .7rem;
-            font-weight: 600;
-            letter-spacing: .04em;
+            font-size: .74rem;
+            font-weight: 700;
+            letter-spacing: .05em;
             text-transform: uppercase;
-            color: #6b7a8a;
+            color: #8a6d1f;
         }
         .upload-rule-body {
             display: flex;
-            align-items: baseline;
+            align-items: center;
             gap: .6rem;
             flex-wrap: wrap;
         }
         .upload-rule-format {
-            font-size: .95rem;
-            font-weight: 700;
-            color: #1a365d;
+            display: inline-flex;
+            align-items: center;
+            font-size: .9rem;
+            font-weight: 800;
+            letter-spacing: .03em;
+            color: #fff;
+            background: var(--primary-navy);
+            padding: .3rem .72rem;
+            border-radius: 6px;
         }
         .upload-rule-size {
-            font-size: .78rem;
-            color: #6b7a8a;
+            font-size: .9rem;
+            color: var(--text-dark);
+            font-weight: 500;
+        }
+        .upload-rule-size strong {
+            font-weight: 800;
+            color: var(--accent-maroon);
         }
         .upload-rules-foot {
-            padding: .5rem .9rem;
-            border-top: 1px solid #e5e9ef;
-            color: #6b7a8a;
-            font-size: .76rem;
+            display: flex;
+            align-items: center;
+            gap: .5rem;
+            padding: .7rem 1.1rem;
+            border-top: 1px solid #f2e4b3;
+            background: rgba(114,47,55,.06);
+            color: var(--accent-maroon);
+            font-size: .84rem;
+            font-weight: 700;
         }
+        .upload-rules-foot i { font-size: 1rem; flex-shrink: 0; }
         @media (max-width: 600px) {
             .upload-rules-grid { grid-template-columns: 1fr; }
-            .upload-rule { border-right: 0; border-bottom: 1px solid #e5e9ef; }
+            .upload-rule { border-right: 0; border-bottom: 1px solid #f2e4b3; }
             .upload-rule:last-child { border-bottom: 0; }
         }
 
@@ -962,7 +965,7 @@ $wizard_steps = [
                             </div>
                         </div>
 
-                        <div style="margin-top:1.4rem; display:flex; gap:.7rem; align-items:center; flex-wrap:wrap">
+                        <div class="wizard-actions">
                             <button type="submit" class="btn-save btn-next"><i class="bi bi-arrow-right-circle"></i> Save &amp; Continue</button>
                         </div>
                     </form>
@@ -982,7 +985,7 @@ $wizard_steps = [
             <?php elseif ($step === 2): ?>
                 <div class="wizard-head">
                     <h2><i class="bi bi-mortarboard" style="color: var(--accent-gold)"></i> Step 2 — Academic Details</h2>
-                    <p>Your faculty, PRN/Enrollment number, roll number, program, and year of study.</p>
+                    <p>Your faculty / program, PRN/Enrollment number, roll number, and year of study.</p>
                 </div>
                 <div class="wizard-body">
                     <?php
@@ -1022,9 +1025,9 @@ $wizard_steps = [
                             </div>
                             <?php endif; ?>
                             <div class="form-group">
-                                <label for="program">Program *</label>
+                                <label for="program">Faculty / Program *</label>
                                 <input type="text" id="program" name="program" required maxlength="120"
-                                       placeholder="e.g. B.Tech, M.Tech"
+                                       placeholder="e.g. B.Tech, M.Tech, B.Arch, MBA"
                                        value="<?= h($student['program'] ?? '') ?>">
                             </div>
                             <div class="form-group">
@@ -1130,7 +1133,7 @@ $wizard_steps = [
                                    value="<?= h((string)($student['gap_year_detail'] ?? '')) ?>">
                         </div>
 
-                        <div style="margin-top:1.4rem; display:flex; gap:.7rem; align-items:center; flex-wrap:wrap">
+                        <div class="wizard-actions">
                             <a href="student-dashboard.php?step=1" class="btn-cancel btn-back"><i class="bi bi-arrow-left"></i> Back</a>
                             <button type="submit" class="btn-save btn-next"><i class="bi bi-arrow-right-circle"></i> Save &amp; Continue</button>
                         </div>
@@ -1283,7 +1286,7 @@ $wizard_steps = [
                             </div>
                             <div class="game-picker-error" id="gamePickerError" role="alert" aria-live="polite"></div>
 
-                            <div style="margin-top:1.4rem; display:flex; gap:.7rem; align-items:center; flex-wrap:wrap">
+                            <div class="wizard-actions">
                                 <a href="student-dashboard.php?step=2" class="btn-cancel btn-back"><i class="bi bi-arrow-left"></i> Back</a>
                                 <button type="submit" class="btn-save btn-next" id="gamePickerSubmit"><i class="bi bi-arrow-right-circle"></i> Save &amp; Continue</button>
                             </div>
@@ -1305,7 +1308,7 @@ $wizard_steps = [
                                            placeholder="e.g. Athletics">
                                 </div>
                             </div>
-                            <div style="margin-top:1.4rem; display:flex; gap:.7rem; align-items:center; flex-wrap:wrap">
+                            <div class="wizard-actions">
                                 <a href="student-dashboard.php?step=2" class="btn-cancel btn-back"><i class="bi bi-arrow-left"></i> Back</a>
                                 <button type="submit" class="btn-save btn-next"><i class="bi bi-arrow-right-circle"></i> Save &amp; Continue</button>
                             </div>
@@ -1386,7 +1389,7 @@ $wizard_steps = [
                             </div>
                             <?php endforeach; ?>
                         </div>
-                        <div style="margin-top:1.4rem; display:flex; gap:.7rem; align-items:center; flex-wrap:wrap">
+                        <div class="wizard-actions">
                             <a href="student-dashboard.php?step=3" class="btn-cancel btn-back"><i class="bi bi-arrow-left"></i> Back</a>
                             <button type="submit" class="btn-save btn-next"><i class="bi bi-arrow-right-circle"></i> Save &amp; Continue</button>
                         </div>
@@ -1516,27 +1519,28 @@ $wizard_steps = [
                     </p>
                     <div class="upload-rules" role="note" aria-label="File upload rules">
                         <div class="upload-rules-head">
-                            <i class="bi bi-info-circle-fill"></i>
-                            <span>File Upload Guidelines</span>
+                            <i class="bi bi-cloud-arrow-up-fill"></i>
+                            <span>File upload rules &mdash; please read before choosing a file</span>
                         </div>
                         <div class="upload-rules-grid">
                             <div class="upload-rule">
                                 <div class="upload-rule-label">Passport-size Photo</div>
                                 <div class="upload-rule-body">
                                     <span class="upload-rule-format">JPEG / JPG</span>
-                                    <span class="upload-rule-size">Target 500&nbsp;KB &middot; Max 1&nbsp;MB</span>
+                                    <span class="upload-rule-size">Max <strong>1&nbsp;MB</strong> &middot; aim for about 500&nbsp;KB</span>
                                 </div>
                             </div>
                             <div class="upload-rule">
-                                <div class="upload-rule-label">Other Documents</div>
+                                <div class="upload-rule-label">All other documents</div>
                                 <div class="upload-rule-body">
-                                    <span class="upload-rule-format">PDF</span>
-                                    <span class="upload-rule-size">Target 500&nbsp;KB &middot; Max 1&nbsp;MB</span>
+                                    <span class="upload-rule-format">PDF only</span>
+                                    <span class="upload-rule-size">Max <strong>1&nbsp;MB</strong> &middot; aim for about 500&nbsp;KB</span>
                                 </div>
                             </div>
                         </div>
                         <div class="upload-rules-foot">
-                            Files exceeding 1&nbsp;MB or uploaded in the wrong format will be rejected.
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                            <span>Files larger than 1&nbsp;MB, or in any other format, will be rejected.</span>
                         </div>
                     </div>
                 </div>
@@ -1651,7 +1655,7 @@ $wizard_steps = [
                         </div>
                     <?php endif; ?>
 
-                    <div style="margin-top:1.4rem; display:flex; gap:.7rem; align-items:center; flex-wrap:wrap">
+                    <div class="wizard-actions">
                         <a href="student-dashboard.php?step=4" class="btn-cancel btn-back"><i class="bi bi-arrow-left"></i> Back</a>
                         <a href="student-dashboard.php?step=6" class="btn-save btn-next"><i class="bi bi-arrow-right-circle"></i> Continue to Preview</a>
                     </div>
@@ -1721,7 +1725,7 @@ $wizard_steps = [
                                 <?php if ($stores_roll_no): ?>
                                     <div class="preview-field"><span class="preview-field-label">Roll No.</span><span class="preview-field-value"><?= $yes((string)($student['roll_no'] ?? '')) ?></span></div>
                                 <?php endif; ?>
-                                <div class="preview-field"><span class="preview-field-label">Program</span><span class="preview-field-value"><?= $yes((string)($student['program'] ?? '')) ?></span></div>
+                                <div class="preview-field"><span class="preview-field-label">Faculty / Program</span><span class="preview-field-value"><?= $yes((string)($student['program'] ?? '')) ?></span></div>
                                 <?php if ($needs_course_duration): ?>
                                     <div class="preview-field"><span class="preview-field-label">Duration of Course</span><span class="preview-field-value"><?= $yes((string)($student['course_duration_years'] ?? '')) ?></span></div>
                                 <?php endif; ?>
@@ -1854,9 +1858,9 @@ $wizard_steps = [
                         </div>
                     <?php endif; ?>
 
-                    <form method="post" action="student_dashboard_process.php?finalize=1" style="margin-top:1.4rem">
+                    <form method="post" action="student_dashboard_process.php?finalize=1">
                         <?= csrf_field() ?>
-                        <div style="display:flex; gap:.7rem; align-items:center; flex-wrap:wrap">
+                        <div class="wizard-actions">
                             <a href="student-dashboard.php?step=5" class="btn-cancel btn-back"><i class="bi bi-arrow-left"></i> Back to Documents</a>
                             <?php if (!empty($student['form_submitted_at'])): ?>
                                 <button type="submit" class="btn-save"><i class="bi bi-check-circle"></i> Re-submit Profile</button>
