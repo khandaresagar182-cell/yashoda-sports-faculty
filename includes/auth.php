@@ -152,7 +152,7 @@ function logout_user(): void
 
 function record_login_attempt(string $username, bool $success): void
 {
-    $ip = inet_pton($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0') ?: "\x00\x00\x00\x00";
+    $ip = inet_pton(client_ip() ?: '0.0.0.0') ?: "\x00\x00\x00\x00";
     $ua = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 250);
     db_insert(
         'INSERT INTO login_attempts (username, ip, user_agent, success) VALUES (?,?,?,?)',
@@ -163,7 +163,7 @@ function record_login_attempt(string $username, bool $success): void
 
 function is_locked_out(): bool
 {
-    $remote = $_SERVER['REMOTE_ADDR'] ?? '';
+    $remote = client_ip();
     // If we can't parse the IP, treat the request as untrusted and lock it out
     // (fail-closed) rather than silently disabling brute-force protection.
     $ip = $remote !== '' ? inet_pton($remote) : false;

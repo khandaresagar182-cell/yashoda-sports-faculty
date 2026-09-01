@@ -290,3 +290,73 @@ function split_full_name_sf(?string $full): array
     $first   = implode(' ', $parts);
     return ['surname' => $surname, 'first_name' => $first, 'middle_name' => $middle];
 }
+
+/* ---------------- client IP (Cloudflare-aware) ---------------- */
+
+/**
+ * Published Cloudflare edge IP ranges (https://www.cloudflare.com/ips/).
+ * These change only a few times a year.
+ */
+function cloudflare_ip_ranges(): array
+{
+    return [
+        // IPv4
+        '173.245.48.0/20', '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22',
+        '141.101.64.0/18', '108.162.192.0/18', '190.93.240.0/20', '188.114.96.0/20',
+        '197.234.240.0/22', '198.41.128.0/17', '162.158.0.0/15', '104.16.0.0/13',
+        '104.24.0.0/14', '172.64.0.0/13', '131.0.72.0/22',
+        // IPv6
+        '2400:cb00::/32', '2606:4700::/32', '2803:f800::/32', '2405:b500::/32',
+        '2405:8100::/32', '2a06:98c0::/29', '2c0f:f248::/32',
+    ];
+}
+
+/** True if $ip (v4 or v6) falls inside any CIDR in $ranges. */
+function ip_in_cidr(string $ip, string $cidr): bool
+{
+    [$subnet, $bits] = array_pad(explode('/', $cidr, 2), 2, null);
+    $bits = (int)$bits;
+    $ipBin = @inet_pton($ip);
+    $subBin = @inet_pton((string)$subnet);
+    if ($ipBin === false || $subBin === false || strlen($ipBin) !== strlen($subBin)) {
+        return false; // v4-vs-v6 mismatch or unparseable
+    }
+    $bytes = intdiv($bits, 8);
+    $rem   = $bits % 8;
+    if ($bytes > 0 && substr($ipBin, 0, $bytes) !== substr($subBin, 0, $bytes)) {
+        return false;
+    }
+    if ($rem === 0) {
+        return true;
+    }
+    $mask = chr(0xff << (8 - $rem) & 0xff);
+    return (($ipBin[$bytes] ^ $subBin[$bytes]) & $mask) === "\x00";
+}
+
+/**
+ * Real client IP.
+ *
+ * When the request genuinely arrives from a Cloudflare edge IP, trust
+ * CF-Connecting-IP (Cloudflare's authoritative visitor IP). Otherwise —
+ * including a request straight to the origin that forges the header —
+ * fall back to REMOTE_ADDR. Used for login lockout + reset rate limiting,
+ * which would otherwise treat every visitor as one shared Cloudflare IP.
+ */
+function client_ip(): string
+{
+    $remote = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+    if ($remote === '') {
+        return '';
+    }
+    $viaCloudflare = false;
+    foreach (cloudflare_ip_ranges() as $cidr) {
+        if (ip_in_cidr($remote, $cidr)) { $viaCloudflare = true; break; }
+    }
+    if ($viaCloudflare) {
+        $cf = trim((string)($_SERVER['HTTP_CF_CONNECTING_IP'] ?? ''));
+        if ($cf !== '' && filter_var($cf, FILTER_VALIDATE_IP) !== false) {
+            return $cf;
+        }
+    }
+    return $remote;
+}

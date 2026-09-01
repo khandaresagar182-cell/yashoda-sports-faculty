@@ -40,7 +40,7 @@ $token_hash = hash('sha256', $token);
 $expires   = date('Y-m-d H:i:s', time() + 1800); // 30 min
 
 // inet_pton returns 4 or 16 bytes; bind as 'b' (blob) to preserve binary.
-$ip_bytes  = @inet_pton($_SERVER['REMOTE_ADDR'] ?? '') ?: null;
+$ip_bytes  = @inet_pton(client_ip()) ?: null;
 $ip_param  = $ip_bytes ?? "\x00\x00\x00\x00";
 $ip_type   = 'b';
 
