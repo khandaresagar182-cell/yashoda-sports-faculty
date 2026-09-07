@@ -107,6 +107,22 @@ if ($pbg_dept_id !== null) {
     }
 }
 
+/* ============== Individual student management (Data Management card) ============== */
+// Deliberately NOT using faculty_visible_student_filter() here — faculty
+// need to see (and be able to clear/delete) draft rows too, not just
+// submitted ones.
+$dm_dept_id  = effective_department_id();
+$dm_students = [];
+if ($dm_dept_id !== null) {
+    $dm_students = db_select(
+        "SELECT id, full_name, enrollment_no, email, form_submitted_at
+           FROM students
+          WHERE department_id = ?
+          ORDER BY full_name",
+        [$dm_dept_id], 'i'
+    );
+}
+
 $flash = flash_get('dashboard_info');
 ?>
 <!DOCTYPE html>
@@ -296,6 +312,30 @@ $flash = flash_get('dashboard_info');
         @media (max-width: 576px) {
             .dm-row { flex-direction: column; align-items: stretch; }
             .btn-danger-solid { justify-content: center; }
+        }
+
+        /* ---- Individual student management ---- */
+        .dm-divider { border: none; border-top: 1px solid var(--light-gray); margin: 1.5rem 0 1.35rem; }
+        .dm-individual h3 { font-size: 0.92rem; font-weight: 700; color: var(--primary-navy); margin: 0 0 0.3rem; }
+        .dm-individual > p { font-size: 0.82rem; color: var(--medium-gray); margin: 0 0 0.9rem; max-width: 720px; line-height: 1.55; }
+        .dm-search { width: 100%; max-width: 340px; padding: 0.55rem 0.8rem; border: 1px solid var(--light-gray); border-radius: 8px; font: inherit; font-size: 0.86rem; margin-bottom: 0.9rem; }
+        .dm-search:focus { outline: none; border-color: var(--primary-navy); box-shadow: 0 0 0 3px rgba(26,54,93,.1); }
+        .dm-table-wrap { max-height: 360px; overflow-y: auto; border: 1px solid var(--light-gray); border-radius: 8px; }
+        .dm-table-wrap table { margin: 0; }
+        .dm-table-wrap thead th { position: sticky; top: 0; z-index: 1; }
+        .dm-bulk-actions { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-top: 1rem; }
+        .dm-bulk-actions .dm-sel-count { font-size: 0.82rem; color: var(--medium-gray); margin-right: auto; }
+        .btn-reset-outline {
+            display: inline-flex; align-items: center; gap: 0.45rem; white-space: nowrap;
+            padding: 0.6rem 1.1rem; border: 1.5px solid var(--primary-navy); border-radius: 8px;
+            background: #fff; color: var(--primary-navy); font: inherit; font-size: 0.85rem; font-weight: 600;
+            cursor: pointer; transition: var(--transition-smooth);
+        }
+        .btn-reset-outline:hover:not(:disabled) { background: var(--off-white); }
+        .btn-reset-outline:disabled { opacity: 0.5; cursor: not-allowed; }
+        @media (max-width: 576px) {
+            .dm-bulk-actions { flex-direction: column; align-items: stretch; }
+            .dm-bulk-actions .dm-sel-count { margin-right: 0; text-align: center; }
         }
     </style>
 </head>
@@ -641,6 +681,96 @@ $flash = flash_get('dashboard_info');
                                 <i class="bi bi-trash3"></i> Delete student data
                             </button>
                         </div>
+
+                        <hr class="dm-divider">
+
+                        <div class="dm-individual">
+                            <h3>Manage individual students</h3>
+                            <p>
+                                Reset a student back to Step 1 (clears their documents, photo, selected games,
+                                bank details, and provisional / final entries — their login stays active), or
+                                delete their record entirely. Scoped to <?= h($purgeScopeLabel) ?>.
+                            </p>
+
+                            <?php if ($dm_dept_id === null): ?>
+                                <div class="filter-hint" style="padding:1rem 0">
+                                    <i class="bi bi-info-circle"></i> Select a faculty to manage individual students.
+                                </div>
+                            <?php elseif (empty($dm_students)): ?>
+                                <div class="filter-hint" style="padding:1rem 0">
+                                    <i class="bi bi-info-circle"></i> No students yet for <?= h($purgeScopeLabel) ?>.
+                                </div>
+                            <?php else: ?>
+                                <input type="text" id="dmSearch" class="dm-search" placeholder="Search by name, enrollment no. or email…">
+                                <div class="dm-table-wrap">
+                                    <table class="data-table" id="dmStudentTable">
+                                        <thead>
+                                            <tr>
+                                                <th style="width:2.2rem"><input type="checkbox" id="dmSelectAll" aria-label="Select all"></th>
+                                                <th>Student</th>
+                                                <th>Enrollment</th>
+                                                <th>Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                        <?php foreach ($dm_students as $s): ?>
+                                            <tr data-search="<?= h(mb_strtolower($s['full_name'] . ' ' . ($s['enrollment_no'] ?? '') . ' ' . ($s['email'] ?? ''))) ?>">
+                                                <td><input type="checkbox" class="dm-row-check" value="<?= (int)$s['id'] ?>"></td>
+                                                <td>
+                                                    <div class="student-name"><?= h($s['full_name']) ?></div>
+                                                    <div class="student-meta"><?= h($s['email'] ?: '—') ?></div>
+                                                </td>
+                                                <td><?= h($s['enrollment_no'] ?: '—') ?></td>
+                                                <td>
+                                                    <?php if (!empty($s['form_submitted_at'])): ?>
+                                                        <span style="display:inline-flex;align-items:center;gap:.3rem;padding:.15rem .55rem;border-radius:50px;font-size:.7rem;font-weight:600;background:rgba(25,135,84,.12);color:#0a3622">
+                                                            <i class="bi bi-check-circle-fill"></i> Submitted
+                                                        </span>
+                                                    <?php else: ?>
+                                                        <span style="display:inline-flex;align-items:center;gap:.3rem;padding:.15rem .55rem;border-radius:50px;font-size:.7rem;font-weight:600;background:rgba(255,193,7,.12);color:#664d03">
+                                                            <i class="bi bi-pencil"></i> Draft
+                                                        </span>
+                                                    <?php endif; ?>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="dm-bulk-actions">
+                                    <span class="dm-sel-count" id="dmSelCount">0 selected</span>
+                                    <button type="button" class="btn-reset-outline" id="dmResetSelBtn" disabled>
+                                        <i class="bi bi-arrow-counterclockwise"></i> Reset selected
+                                    </button>
+                                    <button type="button" class="btn-danger-solid" id="dmDeleteSelBtn" disabled>
+                                        <i class="bi bi-trash3"></i> Delete selected
+                                    </button>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dm-modal" id="dmBulkModal" hidden>
+                    <div class="dm-modal-box" role="dialog" aria-modal="true" aria-labelledby="dmBulkModalTitle">
+                        <div class="dm-modal-head">
+                            <h3 id="dmBulkModalTitle"><i class="bi bi-exclamation-triangle-fill"></i> Confirm</h3>
+                            <button type="button" class="dm-modal-x" id="dmBulkCloseBtn" aria-label="Close">&times;</button>
+                        </div>
+                        <div class="dm-modal-body">
+                            <p id="dmBulkModalText"></p>
+                            <form method="post" action="student_bulk_manage.php" id="dmBulkForm">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="action" id="dmBulkAction" value="">
+                                <div id="dmBulkIdsWrap"></div>
+                                <label for="dmBulkConfirm">Type <code id="dmBulkWordHint">DELETE</code> to confirm</label>
+                                <input type="text" id="dmBulkConfirm" name="confirm" autocomplete="off">
+                                <div class="dm-modal-actions">
+                                    <button type="button" class="btn-ghost" id="dmBulkCancelBtn">Cancel</button>
+                                    <button type="submit" class="btn-danger-solid" id="dmBulkSubmitBtn" disabled>Confirm</button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
                 </div>
 
@@ -712,6 +842,104 @@ $flash = flash_get('dashboard_info');
             modal.addEventListener('click', function (e) { if (e.target === modal) close(); });
             if (confirmA) confirmA.addEventListener('input', evaluate);
             if (confirmB) confirmB.addEventListener('input', evaluate);
+        })();
+
+        (function () {
+            var table = document.getElementById('dmStudentTable');
+            if (!table) return;
+
+            var search     = document.getElementById('dmSearch');
+            var selectAll  = document.getElementById('dmSelectAll');
+            var selCount   = document.getElementById('dmSelCount');
+            var resetBtn   = document.getElementById('dmResetSelBtn');
+            var deleteBtn  = document.getElementById('dmDeleteSelBtn');
+
+            function rowChecks() {
+                return Array.prototype.slice.call(table.querySelectorAll('.dm-row-check'));
+            }
+            function visibleChecks() {
+                return rowChecks().filter(function (cb) { return cb.closest('tr').style.display !== 'none'; });
+            }
+            function updateCount() {
+                var checked = rowChecks().filter(function (cb) { return cb.checked; });
+                selCount.textContent = checked.length + ' selected';
+                resetBtn.disabled = checked.length === 0;
+                deleteBtn.disabled = checked.length === 0;
+            }
+
+            if (search) {
+                search.addEventListener('input', function () {
+                    var q = search.value.trim().toLowerCase();
+                    table.querySelectorAll('tbody tr').forEach(function (tr) {
+                        tr.style.display = tr.dataset.search.indexOf(q) === -1 ? 'none' : '';
+                    });
+                    if (selectAll) selectAll.checked = false;
+                });
+            }
+            if (selectAll) {
+                selectAll.addEventListener('change', function () {
+                    visibleChecks().forEach(function (cb) { cb.checked = selectAll.checked; });
+                    updateCount();
+                });
+            }
+            table.addEventListener('change', function (e) {
+                if (e.target.classList.contains('dm-row-check')) updateCount();
+            });
+
+            var bulkModal   = document.getElementById('dmBulkModal');
+            var bulkAction  = document.getElementById('dmBulkAction');
+            var bulkIdsWrap = document.getElementById('dmBulkIdsWrap');
+            var bulkTitle   = document.getElementById('dmBulkModalTitle');
+            var bulkText    = document.getElementById('dmBulkModalText');
+            var bulkWordHint= document.getElementById('dmBulkWordHint');
+            var bulkConfirm = document.getElementById('dmBulkConfirm');
+            var bulkSubmit  = document.getElementById('dmBulkSubmitBtn');
+
+            function openBulk(action) {
+                var checked = rowChecks().filter(function (cb) { return cb.checked; });
+                if (!checked.length) return;
+
+                bulkAction.value = action;
+                bulkIdsWrap.innerHTML = '';
+                checked.forEach(function (cb) {
+                    var h = document.createElement('input');
+                    h.type = 'hidden';
+                    h.name = 'ids[]';
+                    h.value = cb.value;
+                    bulkIdsWrap.appendChild(h);
+                });
+
+                var word = action === 'delete' ? 'DELETE' : 'RESET';
+                bulkTitle.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i> '
+                    + (action === 'delete' ? 'Delete ' : 'Reset ') + checked.length
+                    + ' student' + (checked.length !== 1 ? 's' : '');
+                bulkText.textContent = action === 'delete'
+                    ? 'This permanently deletes the selected student record(s) and everything they filled in (documents, photo, games, provisional/final entries). This cannot be undone.'
+                    : 'This clears documents, photo, selected games, bank details, and provisional/final entries for the selected student(s), and restarts their wizard at Step 1. Their login stays active. This cannot be undone.';
+                bulkWordHint.textContent = word;
+                bulkConfirm.value = '';
+                bulkSubmit.disabled = true;
+
+                bulkModal.hidden = false;
+                bulkConfirm.focus();
+                document.addEventListener('keydown', onBulkKey);
+            }
+            function closeBulk() {
+                bulkModal.hidden = true;
+                document.removeEventListener('keydown', onBulkKey);
+            }
+            function onBulkKey(e) { if (e.key === 'Escape') closeBulk(); }
+
+            bulkConfirm.addEventListener('input', function () {
+                bulkSubmit.disabled = bulkConfirm.value.trim() !== bulkWordHint.textContent;
+            });
+            resetBtn.addEventListener('click', function () { openBulk('reset'); });
+            deleteBtn.addEventListener('click', function () { openBulk('delete'); });
+            document.getElementById('dmBulkCloseBtn').addEventListener('click', closeBulk);
+            document.getElementById('dmBulkCancelBtn').addEventListener('click', closeBulk);
+            bulkModal.addEventListener('click', function (e) { if (e.target === bulkModal) closeBulk(); });
+
+            updateCount();
         })();
     </script>
 </body>
