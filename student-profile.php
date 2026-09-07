@@ -506,18 +506,64 @@ if (!$is_new && $student) {
                                     <td class="rec-value" colspan="3"><?= h($student['address'] ?: '—') ?></td>
                                 </tr>
 
+                                <?php
+                                    $needs_course_duration_view = ($student['department_code'] ?? '') !== 'polytechnic';
+                                    $gapYearRaw = $student['has_gap_year'] ?? null;
+                                    if ($gapYearRaw === null) {
+                                        $gapYearDisplay = '—';
+                                    } elseif ((int)$gapYearRaw === 1) {
+                                        $gapYearDisplay = 'Yes' . (!empty($student['gap_year_detail']) ? ' (' . $student['gap_year_detail'] . ')' : '');
+                                    } else {
+                                        $gapYearDisplay = 'No';
+                                    }
+                                ?>
                                 <tr class="record-section-row"><td colspan="4"><i class="bi bi-mortarboard"></i> Academic Details</td></tr>
                                 <tr>
                                     <td class="rec-label">Department</td>
                                     <td class="rec-value"><?= h($student['dept_name']) ?></td>
-                                    <td class="rec-label">Program / Branch</td>
+                                    <td class="rec-label">Faculty / Course</td>
                                     <td class="rec-value"><?= h($student['program'] ?: '—') ?></td>
+                                </tr>
+                                <tr>
+                                    <td class="rec-label">Department / Branch</td>
+                                    <td class="rec-value"><?= h($student['department_name'] ?: '—') ?></td>
+                                    <?php if ($needs_course_duration_view): ?>
+                                        <td class="rec-label">Duration of Course</td>
+                                        <td class="rec-value"><?= h($student['course_duration_years'] ?: '—') ?></td>
+                                    <?php else: ?>
+                                        <td class="rec-label"></td>
+                                        <td class="rec-value"></td>
+                                    <?php endif; ?>
                                 </tr>
                                 <tr>
                                     <td class="rec-label">Academic Year</td>
                                     <td class="rec-value"><?= h($student['academic_year'] ?: '—') ?></td>
                                     <td class="rec-label">Year of Study</td>
                                     <td class="rec-value"><?= h($student['study_year'] ?: '—') ?></td>
+                                </tr>
+                                <tr>
+                                    <td class="rec-label">SSC Passing Year</td>
+                                    <td class="rec-value"><?= h($student['ssc_passing_year'] ?: '—') ?></td>
+                                    <td class="rec-label">HSC Passing Year</td>
+                                    <td class="rec-value"><?= h($student['hsc_passing_year'] ?: '—') ?></td>
+                                </tr>
+                                <tr>
+                                    <td class="rec-label">Diploma Passing Year</td>
+                                    <td class="rec-value"><?= h($student['diploma_passing_year'] ?: '—') ?></td>
+                                    <td class="rec-label">Gap / Year Drop</td>
+                                    <td class="rec-value"><?= h($gapYearDisplay) ?></td>
+                                </tr>
+                                <tr>
+                                    <td class="rec-label">First Admission — University/College</td>
+                                    <td class="rec-value"><?= h($student['first_admission_university_year'] ?: '—') ?></td>
+                                    <td class="rec-label">First Admission — Present Course</td>
+                                    <td class="rec-value"><?= h($student['first_admission_course_year'] ?: '—') ?></td>
+                                </tr>
+                                <tr>
+                                    <td class="rec-label">First Admission — Present Class</td>
+                                    <td class="rec-value"><?= h($student['first_admission_class_year'] ?: '—') ?></td>
+                                    <td class="rec-label"></td>
+                                    <td class="rec-value"></td>
                                 </tr>
 
                                 <tr class="record-section-row"><td colspan="4"><i class="bi bi-trophy"></i> Sports Information</td></tr>
