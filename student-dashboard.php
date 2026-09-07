@@ -592,6 +592,7 @@ $wizard_steps = [
         .submitted-sub { font-size:.94rem; color: var(--medium-gray); margin:0 auto 1rem; max-width:480px; line-height:1.6; opacity:0; animation: submittedFadeUp .5s ease-out .92s forwards; }
         .submitted-sub strong { color: var(--text-dark); }
         .submitted-meta { display:inline-flex; align-items:center; gap:.45rem; font-size:.8rem; font-weight:600; color:#146c43; background: rgba(25,135,84,.1); border:1px solid rgba(25,135,84,.25); padding:.4rem .9rem; border-radius:50px; opacity:0; animation: submittedFadeUp .5s ease-out 1.02s forwards; }
+        .submitted-actions { margin-top:1.4rem; opacity:0; animation: submittedFadeUp .5s ease-out 1.08s forwards; }
 
         .submitted-next { display:flex; align-items:flex-start; gap:1rem; padding:1.4rem 2rem; border-top:1px solid var(--light-gray); background: var(--off-white); opacity:0; animation: submittedFadeUp .5s ease-out 1.15s forwards; }
         .submitted-next-icon { flex-shrink:0; width:44px; height:44px; border-radius:50%; background: linear-gradient(135deg, var(--primary-navy), var(--primary-navy-dark)); color:#fff; display:flex; align-items:center; justify-content:center; font-size:1.05rem; animation: submittedBounce 2.2s ease-in-out 1.6s infinite; }
@@ -760,7 +761,8 @@ $wizard_steps = [
             </div>
         <?php endif; ?>
 
-        <?php if ($formLocked): ?>
+        <?php $previewOnly = $formLocked && $step === 6 && isset($_GET['preview']); ?>
+        <?php if ($formLocked && !$previewOnly): ?>
         <div class="submitted-card">
             <div class="submitted-hero">
                 <div class="submitted-check-wrap">
@@ -781,6 +783,11 @@ $wizard_steps = [
                         Submitted on <?= h(date('d M Y \a\t h:i A', strtotime((string)$student['form_submitted_at']))) ?>
                     </div>
                 <?php endif; ?>
+                <div class="submitted-actions">
+                    <a href="student-dashboard.php?step=6&amp;preview=1" class="btn-cancel">
+                        <i class="bi bi-eye"></i> Preview My Submitted Form
+                    </a>
+                </div>
             </div>
 
             <div class="submitted-next">
@@ -808,7 +815,7 @@ $wizard_steps = [
                     $state = 'pending';
                     if ($i < $step) $state = 'done';
                     elseif ($i === $step) $state = 'current';
-                    $editable = $i < $step;
+                    $editable = $i < $step && !$formLocked;
                 ?>
                     <a href="<?= $editable ? 'student-dashboard.php?step=' . $i : '#' ?>"
                        class="pipeline-step <?= h($state) ?>"
@@ -833,6 +840,14 @@ $wizard_steps = [
                 </div>
                 <span><?= round(($step / 6) * 100) ?>% Complete</span>
             </div>
+
+            <?php if ($previewOnly): ?>
+                <div class="alert-banner info" style="margin:1.2rem 1.2rem 0">
+                    <i class="bi bi-eye"></i>
+                    Read-only preview of your submitted profile.
+                    <a href="student-dashboard.php" style="margin-left:auto">Back to status</a>
+                </div>
+            <?php endif; ?>
 
             <!-- ============== Step body ============== -->
             <?php if ($step === 1): ?>
@@ -1663,8 +1678,12 @@ $wizard_steps = [
 
             <?php elseif ($step === 6): ?>
                 <div class="wizard-head">
-                    <h2><i class="bi bi-eye" style="color: var(--accent-gold)"></i> Step 6 — Preview &amp; Submit</h2>
-                    <p>Review everything below. Use the Edit links to jump back to any section. When you're satisfied, click Submit to send your profile to the Faculty of Sports.</p>
+                    <h2><i class="bi bi-eye" style="color: var(--accent-gold)"></i> Step 6 — <?= $formLocked ? 'Submitted Profile' : 'Preview &amp; Submit' ?></h2>
+                    <?php if ($formLocked): ?>
+                        <p>This is a read-only view of what you submitted. Your faculty must re-open editing before you can make changes.</p>
+                    <?php else: ?>
+                        <p>Review everything below. Use the Edit links to jump back to any section. When you're satisfied, click Submit to send your profile to the Faculty of Sports.</p>
+                    <?php endif; ?>
                 </div>
                 <div class="wizard-body">
                     <?php
@@ -1689,7 +1708,7 @@ $wizard_steps = [
                         <div class="preview-card">
                             <div class="preview-card-head">
                                 <div class="preview-card-title"><span class="preview-card-icon"><i class="bi bi-person-vcard"></i></span> Personal Information</div>
-                                <a class="preview-edit-link" href="student-dashboard.php?step=1"><i class="bi bi-pencil"></i> Edit</a>
+                                <?php if (!$formLocked): ?><a class="preview-edit-link" href="student-dashboard.php?step=1"><i class="bi bi-pencil"></i> Edit</a><?php endif; ?>
                             </div>
                             <div class="preview-grid">
                                 <div class="preview-field"><span class="preview-field-label">Full Name</span><span class="preview-field-value"><?= h($student['full_name'] ?? '') ?></span></div>
@@ -1717,7 +1736,7 @@ $wizard_steps = [
                         <div class="preview-card">
                             <div class="preview-card-head">
                                 <div class="preview-card-title"><span class="preview-card-icon"><i class="bi bi-mortarboard"></i></span> Academic Details</div>
-                                <a class="preview-edit-link" href="student-dashboard.php?step=2"><i class="bi bi-pencil"></i> Edit</a>
+                                <?php if (!$formLocked): ?><a class="preview-edit-link" href="student-dashboard.php?step=2"><i class="bi bi-pencil"></i> Edit</a><?php endif; ?>
                             </div>
                             <div class="preview-grid">
                                 <div class="preview-field"><span class="preview-field-label">Faculty</span><span class="preview-field-value"><?= h($student['dept_name']) ?></span></div>
@@ -1748,7 +1767,7 @@ $wizard_steps = [
                         <div class="preview-card">
                             <div class="preview-card-head">
                                 <div class="preview-card-title"><span class="preview-card-icon"><i class="bi bi-trophy"></i></span> Sports Information</div>
-                                <a class="preview-edit-link" href="student-dashboard.php?step=3"><i class="bi bi-pencil"></i> Edit</a>
+                                <?php if (!$formLocked): ?><a class="preview-edit-link" href="student-dashboard.php?step=3"><i class="bi bi-pencil"></i> Edit</a><?php endif; ?>
                             </div>
                             <div class="preview-grid">
                                 <?php if ($uses_game_picker): ?>
@@ -1784,7 +1803,7 @@ $wizard_steps = [
                         <div class="preview-card">
                             <div class="preview-card-head">
                                 <div class="preview-card-title"><span class="preview-card-icon"><i class="bi bi-clock-history"></i></span> Played History</div>
-                                <a class="preview-edit-link" href="student-dashboard.php?step=4"><i class="bi bi-pencil"></i> Edit</a>
+                                <?php if (!$formLocked): ?><a class="preview-edit-link" href="student-dashboard.php?step=4"><i class="bi bi-pencil"></i> Edit</a><?php endif; ?>
                             </div>
                             <div class="preview-grid">
                                 <?php
@@ -1823,7 +1842,7 @@ $wizard_steps = [
                         <div class="preview-card">
                             <div class="preview-card-head">
                                 <div class="preview-card-title"><span class="preview-card-icon"><i class="bi bi-file-earmark-text"></i></span> Documents</div>
-                                <a class="preview-edit-link" href="student-dashboard.php?step=5"><i class="bi bi-pencil"></i> Edit</a>
+                                <?php if (!$formLocked): ?><a class="preview-edit-link" href="student-dashboard.php?step=5"><i class="bi bi-pencil"></i> Edit</a><?php endif; ?>
                             </div>
                             <?php if (!$documents): ?>
                                 <div class="preview-doc-list">
@@ -1851,27 +1870,33 @@ $wizard_steps = [
 
                     </div>
 
-                    <?php if ($required_total > 0 && $required_uploaded < $required_total): ?>
-                        <div class="alert-banner warn" style="margin-top:1.2rem">
-                            <i class="bi bi-exclamation-triangle"></i>
-                            <?= (int)($required_total - $required_uploaded) ?> required document(s) still missing. You can submit anyway — the Faculty of Sports will follow up.
-                        </div>
-                    <?php endif; ?>
-
-                    <form method="post" action="student_dashboard_process.php?finalize=1">
-                        <?= csrf_field() ?>
+                    <?php if ($formLocked): ?>
                         <div class="wizard-actions">
-                            <a href="student-dashboard.php?step=5" class="btn-cancel btn-back"><i class="bi bi-arrow-left"></i> Back to Documents</a>
-                            <?php if (!empty($student['form_submitted_at'])): ?>
-                                <button type="submit" class="btn-save"><i class="bi bi-check-circle"></i> Re-submit Profile</button>
-                                <span style="font-size:.8rem; color: var(--medium-gray)">
-                                    (Submitted on <?= h(date('d M Y H:i', strtotime((string)$student['form_submitted_at']))) ?>)
-                                </span>
-                            <?php else: ?>
-                                <button type="submit" class="btn-save"><i class="bi bi-check-circle"></i> Submit Profile</button>
-                            <?php endif; ?>
+                            <a href="student-dashboard.php" class="btn-cancel"><i class="bi bi-arrow-left"></i> Back to Status</a>
                         </div>
-                    </form>
+                    <?php else: ?>
+                        <?php if ($required_total > 0 && $required_uploaded < $required_total): ?>
+                            <div class="alert-banner warn" style="margin-top:1.2rem">
+                                <i class="bi bi-exclamation-triangle"></i>
+                                <?= (int)($required_total - $required_uploaded) ?> required document(s) still missing. You can submit anyway — the Faculty of Sports will follow up.
+                            </div>
+                        <?php endif; ?>
+
+                        <form method="post" action="student_dashboard_process.php?finalize=1">
+                            <?= csrf_field() ?>
+                            <div class="wizard-actions">
+                                <a href="student-dashboard.php?step=5" class="btn-cancel btn-back"><i class="bi bi-arrow-left"></i> Back to Documents</a>
+                                <?php if (!empty($student['form_submitted_at'])): ?>
+                                    <button type="submit" class="btn-save"><i class="bi bi-check-circle"></i> Re-submit Profile</button>
+                                    <span style="font-size:.8rem; color: var(--medium-gray)">
+                                        (Submitted on <?= h(date('d M Y H:i', strtotime((string)$student['form_submitted_at']))) ?>)
+                                    </span>
+                                <?php else: ?>
+                                    <button type="submit" class="btn-save"><i class="bi bi-check-circle"></i> Submit Profile</button>
+                                <?php endif; ?>
+                            </div>
+                        </form>
+                    <?php endif; ?>
                 </div>
             <?php endif; ?>
         </div>
