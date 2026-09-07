@@ -25,7 +25,7 @@ require_login();
 require_department();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    redirect('dashboard.php');
+    redirect('data_management.php');
 }
 csrf_check();
 
@@ -34,8 +34,8 @@ $isSuper = ($me['role'] ?? '') === 'SUPER_ADMIN';
 $scopeId = effective_department_id();
 
 $fail = static function (string $msg): void {
-    flash_set('dashboard_info', $msg, 'error');
-    redirect('dashboard.php');
+    flash_set('data_management_info', $msg, 'error');
+    redirect('data_management.php');
 };
 
 if (trim((string)($_POST['confirm'] ?? '')) !== 'DELETE') {
@@ -69,8 +69,8 @@ $ids = array_map('intval', array_column(
 ));
 $count = count($ids);
 if ($count === 0) {
-    flash_set('dashboard_info', 'No student records to delete for ' . $scopeLabel . '.', 'info');
-    redirect('dashboard.php');
+    flash_set('data_management_info', 'No student records to delete for ' . $scopeLabel . '.', 'info');
+    redirect('data_management.php');
 }
 
 /* ---- collect file paths before the rows vanish ---- */
@@ -123,8 +123,8 @@ error_log(sprintf(
 ));
 
 flash_set(
-    'dashboard_info',
+    'data_management_info',
     "Deleted {$count} student record(s) for {$scopeLabel}. Eligibility archive files were kept.",
     'success'
 );
-redirect('dashboard.php');
+redirect('data_management.php');

@@ -27,7 +27,7 @@ require_login();
 require_department();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    redirect('dashboard.php');
+    redirect('data_management.php');
 }
 csrf_check();
 
@@ -35,8 +35,8 @@ $me      = current_faculty();
 $scopeId = effective_department_id();
 
 $fail = static function (string $msg): void {
-    flash_set('dashboard_info', $msg, 'error');
-    redirect('dashboard.php');
+    flash_set('data_management_info', $msg, 'error');
+    redirect('data_management.php');
 };
 
 if ($scopeId === null) {
@@ -121,8 +121,8 @@ if ($action === 'delete') {
         '[student_bulk_manage] %s (faculty #%d) deleted %d student record(s), %d file(s) — dept #%d',
         $me['username'] ?? '?', (int)($me['id'] ?? 0), $count, $removed, $scopeId
     ));
-    flash_set('dashboard_info', "Deleted {$count} student record(s).", 'success');
-    redirect('dashboard.php');
+    flash_set('data_management_info', "Deleted {$count} student record(s).", 'success');
+    redirect('data_management.php');
 }
 
 /* ---- action === 'reset' ---- */
@@ -162,8 +162,8 @@ error_log(sprintf(
     $me['username'] ?? '?', (int)($me['id'] ?? 0), $count, $removed, $scopeId
 ));
 flash_set(
-    'dashboard_info',
+    'data_management_info',
     "Reset {$count} student record(s) — documents, photo, games, bank details and provisional/final entries cleared. They'll restart from Step 1 at next login.",
     'success'
 );
-redirect('dashboard.php');
+redirect('data_management.php');

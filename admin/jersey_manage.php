@@ -284,6 +284,7 @@ $flash_err = flash_get('jersey_error');
                 <a href="final_list.php"><i class="bi bi-check-all"></i> <span>Final Teams</span></a>
                 <a href="eligibility_archive.php"><i class="bi bi-folder2-open"></i> <span>Eligibility Archive</span></a>
                 <a href="jersey_dashboard.php" class="active"><i class="bi bi-person-badge"></i> <span>Jersey Kit</span></a>
+                <a href="data_management.php"><i class="bi bi-database-fill-gear"></i> <span>Data Management</span></a>
                 <?php if (($me['role'] ?? '') === 'SUPER_ADMIN'): ?>
                     <div class="sidebar-nav-label">Site Content</div>
                     <a href="notices_list.php"><i class="bi bi-megaphone"></i> <span>Notices</span></a>
