@@ -1025,7 +1025,7 @@ $wizard_steps = [
                             </div>
                             <?php endif; ?>
                             <div class="form-group">
-                                <label for="program">Faculty / Program *</label>
+                                <label for="program">Faculty / Course *</label>
                                 <input type="text" id="program" name="program" required maxlength="120"
                                        placeholder="e.g. B.Tech, M.Tech, B.Arch, MBA"
                                        value="<?= h($student['program'] ?? '') ?>">
@@ -1725,7 +1725,7 @@ $wizard_steps = [
                                 <?php if ($stores_roll_no): ?>
                                     <div class="preview-field"><span class="preview-field-label">Roll No.</span><span class="preview-field-value"><?= $yes((string)($student['roll_no'] ?? '')) ?></span></div>
                                 <?php endif; ?>
-                                <div class="preview-field"><span class="preview-field-label">Faculty / Program</span><span class="preview-field-value"><?= $yes((string)($student['program'] ?? '')) ?></span></div>
+                                <div class="preview-field"><span class="preview-field-label">Faculty / Course</span><span class="preview-field-value"><?= $yes((string)($student['program'] ?? '')) ?></span></div>
                                 <?php if ($needs_course_duration): ?>
                                     <div class="preview-field"><span class="preview-field-label">Duration of Course</span><span class="preview-field-value"><?= $yes((string)($student['course_duration_years'] ?? '')) ?></span></div>
                                 <?php endif; ?>
