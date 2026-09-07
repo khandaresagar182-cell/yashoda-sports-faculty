@@ -1,6 +1,8 @@
 <?php
 /**
- * Student login page. Username = email, Password = DOB in DDMMYYYY.
+ * Student login page. Username = email. Password is DOB in DDMMYYYY for
+ * faculty-created accounts, or a self-chosen password for students who
+ * registered via the email-verification flow (see email_verify.php).
  * Locks out after LOGIN_LOCKOUT_MAX failed attempts (same constants
  * used for faculty login).
  */
@@ -144,19 +146,18 @@ if ($just_registered !== null) unset($_SESSION['_student_just_registered']);
                     </div>
 
                     <div class="form-group">
-                        <label for="studentPassword">Password (Your DOB)</label>
+                        <label for="studentPassword">Password</label>
                         <div class="input-wrapper">
                             <input type="password" id="studentPassword" name="password" required
                                    autocomplete="current-password"
-                                   placeholder="DDMMYYYY"
-                                   pattern="[0-9]{8}" maxlength="8" inputmode="numeric">
+                                   placeholder="Enter your password">
                             <i class="bi bi-lock"></i>
                             <button type="button" class="password-toggle" id="togglePassword"
                                     aria-label="Toggle password visibility">
                                 <i class="bi bi-eye"></i>
                             </button>
                         </div>
-                        <div class="pwd-hint">First-time login? Your password is your date of birth in DDMMYYYY format (e.g. 15082004).</div>
+                        <div class="pwd-hint">First-time login? If you registered directly (no email verification), your password is your date of birth in DDMMYYYY format (e.g. 15082004). If you verified your email, use the password you created.</div>
                     </div>
 
                     <div class="form-options">

@@ -215,6 +215,7 @@ $files  = [
     'migration-v44-bank-details.sql',
     'migration-v45-eligibility-archive.sql',
     'migration-v46-heal-document-requirements.sql',
+    'migration-v47-email-verification.sql',
     'migration_student_auth.sql',
 ];
 

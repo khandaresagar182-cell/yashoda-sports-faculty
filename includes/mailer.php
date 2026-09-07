@@ -125,6 +125,34 @@ function send_student_credentials_email(string $toEmail, string $studentName, st
 }
 
 /**
+ * Email a self-registering student their verify-email link. Best-effort —
+ * see file docblock; the caller must not treat a false return as fatal,
+ * but for this specific flow a failed send does leave the student unable
+ * to finish creating their account until they re-register (there is no
+ * on-screen fallback, unlike the old DOB-password flow) — see the
+ * APP_ENV === 'local' dev-link fallback in register_process.php.
+ */
+function send_verification_email(string $toEmail, string $studentName, string $verifyUrl): bool
+{
+    $safeName = htmlspecialchars($studentName, ENT_QUOTES, 'UTF-8');
+    $safeUrl  = htmlspecialchars($verifyUrl, ENT_QUOTES, 'UTF-8');
+
+    $subject = 'Verify your email — Sports Portal';
+    $html = <<<HTML
+        <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;color:#212529">
+            <h2 style="color:#1a365d;margin-bottom:4px">Welcome, {$safeName}!</h2>
+            <p>Thanks for registering with the Sports Portal. Verify your email address to create your password and activate your account:</p>
+            <p><a href="{$safeUrl}" style="background:#1a365d;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;display:inline-block">Verify My Email</a></p>
+            <p style="font-size:13px;color:#6c757d">This link expires in 24 hours. If you did not register for a Sports Portal account, you can ignore this email.</p>
+        </div>
+        HTML;
+
+    $text = "Welcome, $studentName!\n\nVerify your email to create your password and activate your account:\n$verifyUrl\n\nThis link expires in 24 hours. If you did not register, ignore this email.";
+
+    return send_mail($toEmail, $studentName, $subject, $html, $text);
+}
+
+/**
  * Email a faculty their archived eligibility form(s). Best-effort — see
  * file docblock; callers must not treat a false return as fatal.
  *

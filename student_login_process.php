@@ -1,7 +1,12 @@
 <?php
 /**
- * Student login handler. Validates email + DOB-password, sets the
- * student session, and redirects to student-dashboard.php.
+ * Student login handler. Validates email + password, sets the student
+ * session, and redirects to student-dashboard.php.
+ *
+ * Password format varies by how the account was created: faculty-created
+ * accounts (and self-registrations from before email verification was
+ * added) use DOB in DDMMYYYY format; students who verified their email
+ * chose their own password. Login just checks the hash either way.
  */
 
 declare(strict_types=1);
@@ -33,14 +38,6 @@ if (!filter_var($email, FILTER_VALIDATE_EMAIL) || $password === '') {
     redirect('student-login.php');
 }
 
-// Password must be 8 digits (DDMMYYYY)
-if (!preg_match('/^[0-9]{8}$/', $password)) {
-    record_login_attempt($email, false);
-    flash_set('student_login_error',
-        'Password must be 8 digits in DDMMYYYY format. (Your date of birth, e.g. 15082004).', 'error');
-    redirect('student-login.php');
-}
-
 $student = db_one(
     'SELECT id, email, full_name, department_id, password_hash, is_active
        FROM students
@@ -57,7 +54,9 @@ if (!$student || empty($student['password_hash']) || !$student['is_active']) {
 
 if (!password_verify($password, $student['password_hash'])) {
     record_login_attempt($email, false);
-    flash_set('student_login_error', 'Incorrect password. Hint: it is your date of birth (DDMMYYYY).', 'error');
+    flash_set('student_login_error',
+        'Incorrect password. If you never set your own password, try your date of birth (DDMMYYYY) — otherwise use "Forgot Password" below.',
+        'error');
     redirect('student-login.php');
 }
 

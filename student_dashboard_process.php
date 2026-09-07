@@ -13,7 +13,10 @@
  *                    back to step 6 with a success flash.
  *
  * If a DOB is changed on step 1, the password_hash is re-derived from the
- * new DOB (DDMMYYYY), same as the legacy single-page flow.
+ * new DOB (DDMMYYYY), same as the legacy single-page flow — unless the
+ * student chose their own password via email_verify.php
+ * (students.password_set_by_user = 1), in which case DOB edits leave the
+ * password alone.
  */
 
 declare(strict_types=1);
@@ -194,8 +197,10 @@ function handle_step_save(int $meId, int $step): void
             redirect('student-dashboard.php?step=1');
         }
 
-        /* detect DOB change → reset password */
-        $dob_changed = (date('Y-m-d', $dob_ts) !== (string)$current['dob']);
+        /* detect DOB change → reset password (skip if the student chose
+         * their own password via email verification) */
+        $dob_changed = (date('Y-m-d', $dob_ts) !== (string)$current['dob'])
+            && (int)($current['password_set_by_user'] ?? 0) === 0;
 
         $sql = 'UPDATE students SET
                     full_name = ?, mother_name = ?, father_name = ?, dob = ?, aadhar_number = ?, gender = ?, blood_group = ?,

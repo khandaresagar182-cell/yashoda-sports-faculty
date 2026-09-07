@@ -1,8 +1,10 @@
 <?php
 /**
  * Public student self-registration page.
- * Collects: name, email, mobile, DOB, department.
- * Username (email) and password (DOB as DDMMYYYY) are then shown on screen.
+ * Collects: name, email, mobile, DOB, department. Submitting sends a
+ * verification link to the given email (see register_process.php /
+ * email_verify.php) — the account isn't created until that link is
+ * opened and the student chooses their own password.
  */
 
 declare(strict_types=1);
@@ -201,7 +203,6 @@ if ($old) unset($_SESSION['_register_old']);
                             <input type="text" id="dob" name="dob" required autocomplete="off"
                                    placeholder="dd-mm-yyyy"
                                    value="<?= h($old['dob'] ?? '') ?>">
-                            <div class="hint">Password = DOB in DDMMYYYY format.</div>
                         </div>
                         <div class="form-group">
                             <label for="department_id">Faculty *</label>
@@ -219,14 +220,13 @@ if ($old) unset($_SESSION['_register_old']);
 
                     <div class="info-note">
                         <i class="bi bi-info-circle"></i>
-                        After registering, your <strong>username (email)</strong> and
-                        <strong>password (your DOB in DDMMYYYY)</strong> will be shown on screen.
-                        Please save them — you can change your password later from your dashboard.
+                        After registering, we'll email a <strong>verification link</strong> to the address above.
+                        Open it to confirm your email and choose your own password — that's when your account is created.
                     </div>
 
                     <div style="margin-top:1.1rem">
                         <button type="submit" class="btn-register">
-                            <i class="bi bi-check2-circle"></i> Create My Account
+                            <i class="bi bi-envelope-check"></i> Send Verification Link
                         </button>
                     </div>
                 </form>

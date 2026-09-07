@@ -1,9 +1,12 @@
 <?php
 /**
  * Public registration handler.
- * POST -> validates, ensures email is unique, creates the student row
- * with password_hash = bcrypt(DOB in DDMMYYYY), then redirects to a
- * one-shot "credentials" page that shows username + password.
+ * POST -> validates, ensures the email isn't already a real account,
+ * stashes the submitted details in `pending_registrations` behind a
+ * hashed token, emails a verification link (email_verify.php?token=...),
+ * then redirects to a "check your email" page. The actual `students` row
+ * is only created once that link is opened and the student sets their
+ * own password — see email_verify.php.
  */
 
 declare(strict_types=1);
@@ -76,8 +79,11 @@ if ($department_id > 0 && !$dept) {
     $errors[] = 'Selected faculty is invalid.';
 }
 
-// Email uniqueness — case-insensitive (the column is utf8mb4_unicode_ci, so
-// this lookup is already case-insensitive, but be explicit)
+// Email uniqueness against real accounts only — case-insensitive (the
+// column is utf8mb4_unicode_ci, so this lookup is already
+// case-insensitive, but be explicit). A pending (unverified) registration
+// for the same email is NOT an error — re-submitting just replaces it
+// with a fresh link below, so a lost/expired email can be retried.
 if (!$errors) {
     $existing = db_one('SELECT id FROM students WHERE email = ?', [$email], 's');
     if ($existing) {
@@ -101,66 +107,56 @@ if ($errors) {
     redirect('student-register.php');
 }
 
-/* ---------------- create the account ---------------- */
+/* ---------------- stash pending + send verification link ---------------- */
 
-$plaintext_password = dob_to_password($dob);   // DDMMYYYY
-$hash = password_hash($plaintext_password, PASSWORD_BCRYPT);
-
-// enrollment_no is intentionally left NULL for self-registered students.
-// The student is required to enter their real enrollment number on
-// Step 2 of the wizard (student-dashboard.php). The UNIQUE constraint
-// allows multiple NULLs in InnoDB, so there's no collision risk.
-$enrollment_no = null;
+$token      = bin2hex(random_bytes(32));
+$token_hash = hash('sha256', $token);
+$expires    = date('Y-m-d H:i:s', time() + 86400); // 24 hours
 
 try {
-    $new_id = db_insert(
-        'INSERT INTO students
-            (enrollment_no, full_name, mother_name, dob, gender, email, mobile, department_id,
-             password_hash, is_active, is_self_registered, registered_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,NOW())',
+    // Drop any earlier unverified attempt for this email so re-registering
+    // (e.g. because the first link expired or never arrived) just issues a
+    // fresh one instead of erroring out.
+    db_execute('DELETE FROM pending_registrations WHERE email = ?', [$email], 's');
+
+    db_insert(
+        'INSERT INTO pending_registrations
+            (email, full_name, mother_name, gender, dob, mobile, department_id, token_hash, expires_at)
+         VALUES (?,?,?,?,?,?,?,?,?)',
         [
-            $enrollment_no,
+            $email,
             $full_name,
             $mother_name,
-            date('Y-m-d', $dob_ts),
             $gender,
-            $email,
+            date('Y-m-d', $dob_ts),
             $mobile,
             $department_id,
-            $hash,
-            1,    // is_active
-            1,    // is_self_registered
+            $token_hash,
+            $expires,
         ],
-        'sssssssisii'
+        'ssssssiss'
     );
 } catch (Throwable $e) {
-    error_log('[register] insert failed: ' . $e->getMessage());
-    // Surface the real error to the user only when the env explicitly asks
-    // for it. Default keeps the generic message (don't leak DB internals).
-    // APP_DEBUG=1 in .user.ini on the live site lets you see the real
-    // failure while debugging without committing the leak to the codebase.
+    error_log('[register] pending insert failed: ' . $e->getMessage());
     $showDebug = getenv('APP_DEBUG') === '1';
     $msg = $showDebug
-        ? 'Could not create the account: ' . $e->getMessage()
-        : 'Could not create the account. Please try again.';
+        ? 'Could not start registration: ' . $e->getMessage()
+        : 'Could not start registration. Please try again.';
     flash_set('register_error', $msg, 'error');
     redirect('student-register.php');
 }
 
-/* ---------------- email the credentials (best-effort) ---------------- */
-// Never let a broken/unconfigured mail server block registration — the
-// on-screen credentials screen below is the guaranteed fallback either way.
-$emailed = send_student_credentials_email($email, $full_name, $email, $plaintext_password);
+$verify_url = rtrim(SITE_URL, '/') . '/email_verify.php?token=' . $token;
+$emailed    = send_verification_email($email, $full_name, $verify_url);
 
-/* ---------------- stash credentials in a one-shot flash + redirect ---------------- */
+/* ---------------- stash a one-shot "check your email" payload ---------------- */
 
-$_SESSION['_new_account'] = [
-    'email'    => $email,
-    'password' => $plaintext_password,
-    'name'     => $full_name,
-    'emailed'  => $emailed,
-    // Show the credentials once and forget. This makes the page
-    // non-refreshable: hitting refresh shows an error.
-    'shown_at' => time(),
+$_SESSION['_register_pending'] = [
+    'email'   => $email,
+    'name'    => $full_name,
+    'emailed' => $emailed,
+    // Local/dev only — see includes/mailer.php docblock on why a failed
+    // send otherwise leaves the student with no way to finish signing up.
+    'dev_link' => (APP_ENV === 'local') ? $verify_url : null,
 ];
 redirect('register_success.php');

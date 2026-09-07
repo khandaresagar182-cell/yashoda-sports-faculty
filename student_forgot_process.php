@@ -56,7 +56,10 @@ if (!$plaintext) {
 }
 
 $new_hash = password_hash($plaintext, PASSWORD_BCRYPT);
-db_execute('UPDATE students SET password_hash = ? WHERE id = ?', [$new_hash, (int)$student['id']], 'si');
+// Resetting to the DOB-derived password puts the account back on the
+// DOB-password scheme, so student_dashboard_process.php should resume
+// syncing the password whenever DOB is edited on Step 1.
+db_execute('UPDATE students SET password_hash = ?, password_set_by_user = 0 WHERE id = ?', [$new_hash, (int)$student['id']], 'si');
 record_login_attempt($email, true);
 
 $_SESSION['_student_reset_show'] = [

@@ -898,7 +898,9 @@ $wizard_steps = [
                                 <input type="text" id="dob" name="dob" required autocomplete="off"
                                        placeholder="dd-mm-yyyy"
                                        value="<?= h($student['dob'] ?? '') ?>">
-                                <div class="hint">If you change this, your login password also changes (to the new DOB in DDMMYYYY).</div>
+                                <?php if ((int)($student['password_set_by_user'] ?? 0) === 0): ?>
+                                    <div class="hint">If you change this, your login password also changes (to the new DOB in DDMMYYYY).</div>
+                                <?php endif; ?>
                             </div>
                             <div class="form-group">
                                 <label for="aadhar_number">Aadhar Number<?= $aadhar_required ? ' *' : '' ?></label>

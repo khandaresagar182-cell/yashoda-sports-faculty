@@ -1,26 +1,27 @@
 <?php
 /**
- * One-shot page that shows the new student's username + password.
- * Backed by $_SESSION['_new_account']; that data is removed on first read
- * so a refresh of this page shows an "already used" message.
+ * One-shot "check your email" page shown right after registering.
+ * Backed by $_SESSION['_register_pending']; that data is removed on first
+ * read so a refresh of this page shows a generic fallback instead.
+ * The actual account isn't created yet — see email_verify.php.
  */
 
 declare(strict_types=1);
 
 require_once __DIR__ . '/includes/bootstrap.php';
 
-$creds = $_SESSION['_new_account'] ?? null;
-if ($creds) unset($_SESSION['_new_account']);
+$pending = $_SESSION['_register_pending'] ?? null;
+if ($pending) unset($_SESSION['_register_pending']);
 
 // If they refresh the page, we have nothing to show.
-$expired = !$creds;
+$expired = !$pending;
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Account Created | Faculty of Sports</title>
+    <title>Check Your Email | Faculty of Sports</title>
     <?= csrf_meta() ?>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"
         integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
@@ -43,13 +44,6 @@ $expired = !$creds;
         .success-header h1 { color:#fff; font-size:1.25rem; font-weight:700; margin-bottom:.2rem; }
         .success-header p { color: rgba(255,255,255,.85); font-size:.85rem; }
         .success-body { padding:1.5rem 1.6rem 1.4rem; }
-        .cred-row { display:flex; align-items:stretch; border:2px solid var(--light-gray); border-radius:8px; overflow:hidden; margin-bottom:.85rem; }
-        .cred-label { background: var(--off-white); padding:.65rem .9rem; min-width:120px; display:flex; align-items:center; gap:.5rem; font-size:.78rem; font-weight:700; color: var(--primary-navy); text-transform:uppercase; letter-spacing:.3px; border-right:1px solid var(--light-gray); }
-        .cred-label i { color: var(--accent-gold); font-size:.95rem; }
-        .cred-value { flex:1; padding:.65rem .9rem; font-family: 'Courier New', monospace; font-size:1rem; font-weight:600; color: var(--text-dark); background:#fff; display:flex; align-items:center; word-break: break-all; }
-        .btn-copy { background: var(--accent-gold); color:#fff; border:none; padding:0 .8rem; cursor:pointer; font-size:.8rem; font-weight:600; transition: var(--transition-smooth); min-width:60px; }
-        .btn-copy:hover { background: var(--accent-gold-light, #d4b84a); }
-        .btn-copy.copied { background:#1e7e34; }
         .warning-box { background: rgba(255,193,7,.1); border:1px solid rgba(255,193,7,.3); color:#664d03; padding:.75rem .9rem; border-radius:8px; font-size:.82rem; line-height:1.5; margin-bottom:1.1rem; }
         .warning-box i { color:#856404; margin-right:.3rem; }
         .btn-primary-action { display:inline-flex; align-items:center; gap:.5rem; width:100%; justify-content:center; padding:.85rem; background: linear-gradient(135deg, var(--primary-navy), var(--primary-navy-dark)); color:#fff; border:none; border-radius:8px; font-family:inherit; font-size:.95rem; font-weight:600; letter-spacing:.5px; text-transform:uppercase; cursor:pointer; transition: var(--transition-smooth); text-decoration:none; }
@@ -71,10 +65,6 @@ $expired = !$creds;
             .success-icon i { font-size: 1.5rem; }
             .success-body { padding: 1.15rem 1.15rem 1rem; }
             .warning-box { font-size: 0.75rem; padding: 0.6rem 0.8rem; margin-bottom: 0.85rem; }
-            .cred-row { flex-direction: column; }
-            .cred-label { min-width: auto; border-right: none; border-bottom: 1px solid var(--light-gray); padding: .5rem .75rem; font-size: .72rem; }
-            .cred-value { font-size: .9rem; padding: .55rem .75rem; }
-            .btn-copy { padding: .55rem .75rem; min-width: auto; }
             .btn-primary-action { padding: 0.75rem; font-size: 0.9rem; }
             .login-footer p { font-size: 0.75rem; }
         }
@@ -83,39 +73,41 @@ $expired = !$creds;
 <body>
     <main class="success-page">
         <div class="success-card">
-            <?php if ($creds): ?>
+            <?php if ($pending): ?>
                 <div class="success-header">
-                    <div class="success-icon"><i class="bi bi-check-lg"></i></div>
-                    <h1>Account Created Successfully!</h1>
-                    <p>Welcome, <?= h($creds['name']) ?>. Please save your credentials below.</p>
+                    <div class="success-icon"><i class="bi bi-envelope-check"></i></div>
+                    <h1>Check Your Email</h1>
+                    <p>Welcome, <?= h($pending['name']) ?>. One step left to activate your account.</p>
                 </div>
 
                 <div class="success-body">
-                    <div class="warning-box">
-                        <i class="bi bi-exclamation-triangle-fill"></i>
-                        <strong>Important:</strong> Save these credentials now.
-                        This page will not show them again after a refresh.
-                        You can change your password from your dashboard at any time.
-                    </div>
-
-                    <?php if (!empty($creds['emailed'])): ?>
+                    <?php if (!empty($pending['emailed'])): ?>
                         <div class="warning-box" style="background: rgba(25,135,84,.1); border-color: rgba(25,135,84,.3); color:#0a3622">
                             <i class="bi bi-envelope-check-fill" style="color:#198754"></i>
-                            A copy of these credentials was also emailed to <strong><?= h($creds['email']) ?></strong>.
+                            We've sent a verification link to <strong><?= h($pending['email']) ?></strong>.
+                            Open it and choose a password to finish creating your account.
+                        </div>
+                    <?php else: ?>
+                        <div class="warning-box">
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                            We couldn't send the verification email to <strong><?= h($pending['email']) ?></strong> right now.
+                            Please try registering again shortly, or contact the Faculty of Sports if this keeps happening.
                         </div>
                     <?php endif; ?>
 
-                    <div class="cred-row">
-                        <div class="cred-label"><i class="bi bi-person"></i> Username</div>
-                        <div class="cred-value" id="credUser"><?= h($creds['email']) ?></div>
-                        <button type="button" class="btn-copy" data-copy="credUser">Copy</button>
+                    <div class="warning-box">
+                        <i class="bi bi-clock-history"></i>
+                        The link expires in 24 hours. Didn't get it? Check your spam folder, or
+                        <a href="student-register.php">register again with the same email</a> to get a new one.
                     </div>
 
-                    <div class="cred-row">
-                        <div class="cred-label"><i class="bi bi-key"></i> Password</div>
-                        <div class="cred-value" id="credPass"><?= h($creds['password']) ?></div>
-                        <button type="button" class="btn-copy" data-copy="credPass">Copy</button>
-                    </div>
+                    <?php if (!empty($pending['dev_link'])): ?>
+                        <div class="warning-box" style="background: rgba(13,110,253,.06); border-color: rgba(13,110,253,.2); color:#052c65">
+                            <i class="bi bi-bug-fill"></i>
+                            <strong>Local dev only:</strong>
+                            <a href="<?= h($pending['dev_link']) ?>"><?= h($pending['dev_link']) ?></a>
+                        </div>
+                    <?php endif; ?>
 
                     <a href="student-login.php" class="btn-primary-action" style="margin-top:.5rem">
                         <i class="bi bi-box-arrow-in-right"></i> Go to Login
@@ -130,15 +122,15 @@ $expired = !$creds;
             <?php else: ?>
                 <div class="success-header">
                     <div class="success-icon"><i class="bi bi-info-circle"></i></div>
-                    <h1>Credentials Already Viewed</h1>
-                    <p>For security, the credentials are shown only once.</p>
+                    <h1>Nothing to Show</h1>
+                    <p>This page is only shown right after registering.</p>
                 </div>
                 <div class="expired-box">
-                    <i class="bi bi-shield-lock"></i>
-                    <h2>Need your password?</h2>
-                    <p>If you didn't save your password, use the "Forgot Password" link on the login page to reset it to your date of birth.</p>
-                    <a href="student-login.php" class="btn-primary-action">
-                        <i class="bi bi-box-arrow-in-right"></i> Go to Login
+                    <i class="bi bi-envelope"></i>
+                    <h2>Already registered?</h2>
+                    <p>Check your email for the verification link, or register again if it expired.</p>
+                    <a href="student-register.php" class="btn-primary-action">
+                        <i class="bi bi-person-plus"></i> Register
                     </a>
                 </div>
             <?php endif; ?>
@@ -148,42 +140,5 @@ $expired = !$creds;
     <footer class="login-footer">
         <p>&copy; 2026 <a href="index.php">YSPM's Yashoda Technical Campus, Satara</a>. All Rights Reserved.</p>
     </footer>
-
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            document.querySelectorAll('.btn-copy[data-copy]').forEach(function (btn) {
-                btn.addEventListener('click', function () {
-                    var el = document.getElementById(btn.getAttribute('data-copy'));
-                    if (!el) return;
-                    var text = el.textContent.trim();
-                    if (navigator.clipboard && window.isSecureContext) {
-                        navigator.clipboard.writeText(text).then(showCopied).catch(fallbackCopy);
-                    } else {
-                        fallbackCopy();
-                    }
-                    function fallbackCopy() {
-                        var ta = document.createElement('textarea');
-                        ta.value = text;
-                        ta.style.position = 'fixed';
-                        ta.style.opacity = '0';
-                        document.body.appendChild(ta);
-                        ta.select();
-                        try { document.execCommand('copy'); } catch (e) {}
-                        document.body.removeChild(ta);
-                        showCopied();
-                    }
-                    function showCopied() {
-                        var orig = btn.textContent;
-                        btn.textContent = 'Copied!';
-                        btn.classList.add('copied');
-                        setTimeout(function () {
-                            btn.textContent = orig;
-                            btn.classList.remove('copied');
-                        }, 1500);
-                    }
-                });
-            });
-        });
-    </script>
 </body>
 </html>
