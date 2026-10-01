@@ -1,3 +1,8 @@
+> **Note — parts of this guide describe hosts that are no longer in use (Railway, DigitalOcean, GoDaddy).**
+> Production is Namecheap cPanel: see the README's *Deployment* section and `scripts/build-namecheap-zip.ps1`.
+> `sql/seed.sql` and the DigitalOcean/Railway helper scripts mentioned below were removed in the cleanup pass, and the seeded
+> default logins listed here must be changed on any real deployment.
+
 # Installation Guide — College Sports Faculty Portal
 
 A PHP + MySQL web application for the YSPM Yashoda Technical Campus Sports Faculty. Built on top of the original static HTML mockup.
@@ -274,7 +279,6 @@ college-sports-faculty/
 │   └── achievements_manage.php  (placeholder — extend in v2)
 ├── sql/
 │   ├── schema.sql            Database schema (9 tables)
-│   ├── seed.sql              Seed data with `__HASH__` placeholders
 │   ├── generate-hashes.php   One-shot script: writes seed.ready.sql
 │   ├── fix-seed-hashes.php   Repair script: re-syncs seed-user hashes
 │   ├── seed.ready.sql        Generated seed (after running the above)

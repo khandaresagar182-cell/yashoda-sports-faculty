@@ -2,15 +2,17 @@
 /**
  * Student wizard save endpoint.
  *
- * Three modes on POST, all guarded by CSRF + require_student():
+ * Four modes on POST, all guarded by CSRF + require_student():
  *   ?step=N       (N=1,2,3,4) — save the fields for that wizard step,
  *                                bump students.form_step to N+1, redirect
  *                                to the next step with a green flash.
  *   ?step=5       — handle a single document upload or delete (called via
  *                    fetch() from the documents UI). Returns JSON.
+ *   ?step=6       — save jersey_number/jersey_size, bump form_step to 7,
+ *                    redirect to the Preview step with a green flash.
  *   ?finalize=1   — student hit Submit on the preview. Set
- *                    form_submitted_at = NOW(), form_step = 6, redirect
- *                    back to step 6 with a success flash.
+ *                    form_submitted_at = NOW(), form_step = 7, redirect
+ *                    back to step 7 with a success flash.
  *
  * If a DOB is changed on step 1, the password_hash is re-derived from the
  * new DOB (DDMMYYYY), same as the legacy single-page flow — unless the
@@ -62,7 +64,7 @@ if ($deleteId > 0) {
 }
 
 $step = (int)$stepParam;
-if ($step < 1 || $step > 5) {
+if ($step < 1 || $step > 6) {
     redirect('student-dashboard.php');
 }
 
@@ -72,6 +74,11 @@ if ($step === 5) {
         return;
     }
     handle_doc_upload($meId);
+    return;
+}
+
+if ($step === 6) {
+    handle_jersey_save($meId);
     return;
 }
 
@@ -493,6 +500,52 @@ function handle_step_save(int $meId, int $step): void
 }
 
 /* =================================================================
+ * Mode 1b — Jersey details save (step=6)
+ * ================================================================= */
+function handle_jersey_save(int $meId): void
+{
+    $number = trim((string)($_POST['jersey_number'] ?? ''));
+    $size   = trim((string)($_POST['jersey_size'] ?? ''));
+    $shorts = trim((string)($_POST['shorts_size'] ?? ''));
+    $track  = trim((string)($_POST['track_size'] ?? ''));
+
+    if ($number !== '' && !preg_match('/^[A-Za-z0-9]{1,10}$/', $number)) {
+        flash_set('student_dashboard_err', 'Jersey number can only contain letters and digits (max 10 characters).', 'error');
+        redirect('student-dashboard.php?step=6');
+    }
+    if ($size !== '' && !array_key_exists($size, jersey_size_options())) {
+        flash_set('student_dashboard_err', 'Please choose a valid jersey size.', 'error');
+        redirect('student-dashboard.php?step=6');
+    }
+    if ($shorts !== '' && !array_key_exists($shorts, shorts_size_options())) {
+        flash_set('student_dashboard_err', 'Please choose a valid shorts size.', 'error');
+        redirect('student-dashboard.php?step=6');
+    }
+    if ($track !== '' && !array_key_exists($track, shorts_size_options())) {
+        flash_set('student_dashboard_err', 'Please choose a valid track pant size.', 'error');
+        redirect('student-dashboard.php?step=6');
+    }
+
+    db_execute(
+        'UPDATE students
+            SET jersey_number = ?, jersey_size = ?, shorts_size = ?, track_size = ?,
+                form_step = GREATEST(COALESCE(form_step, 0), 7)
+          WHERE id = ?',
+        [
+            $number !== '' ? $number : null,
+            $size !== '' ? $size : null,
+            $shorts !== '' ? $shorts : null,
+            $track !== '' ? $track : null,
+            $meId,
+        ],
+        'ssssi'
+    );
+
+    flash_set('student_dashboard_ok', 'Jersey details saved.', 'success');
+    redirect('student-dashboard.php?step=7');
+}
+
+/* =================================================================
  * Mode 2b — Bank account details save (step=5, POST bank_details=1)
  * The five text fields that go with the "Bank passbook" upload.
  * Returns JSON; called via fetch().
@@ -666,14 +719,14 @@ function handle_doc_delete(int $meId, int $docId): void
 
 /* =================================================================
  * Mode 4 — Final submit (finalize=1)
- * Marks form_submitted_at = NOW() and form_step = 6.
+ * Marks form_submitted_at = NOW() and form_step = 7.
  * ================================================================= */
 function handle_finalize(int $meId): void
 {
     db_execute(
         'UPDATE students
             SET form_submitted_at = NOW(),
-                form_step         = 6,
+                form_step         = 7,
                 edit_unlocked     = 0
           WHERE id = ?',
         [$meId], 'i'

@@ -233,7 +233,9 @@ function poly_docx_page(
     string $event,
     string $academicYear,
     array $participants,
-    bool $includeLogo
+    bool $includeLogo,
+    int $startingNumber = 1,
+    bool $includeCertification = true
 ): string {
     $year = preg_match('/^(\d{4})-(\d{4})$/', $academicYear, $matches)
         ? $matches[1] . '-' . substr($matches[2], -2)
@@ -323,7 +325,7 @@ function poly_docx_page(
     ]];
     foreach ($participants as $index => $participant) {
         $tableRows[] = [
-            poly_docx_paragraph(poly_docx_run((string)($index + 1), ['bold' => true, 'size' => 14]), ['align' => 'center']),
+            poly_docx_paragraph(poly_docx_run((string)($startingNumber + $index), ['bold' => true, 'size' => 14]), ['align' => 'center']),
             poly_docx_paragraph(poly_docx_run(trim((string)($participant['full_name'] ?? '')), ['bold' => true, 'size' => 14])),
             poly_docx_paragraph(poly_docx_run(poly_docx_year_course($participant['study_year'] ?? null, $participant['program'] ?? null), ['bold' => true, 'size' => 14])),
             poly_docx_paragraph(poly_docx_run(trim((string)($participant['roll_no'] ?? '')), ['bold' => true, 'size' => 12]), ['align' => 'center']),
@@ -341,16 +343,18 @@ function poly_docx_page(
     }
     $content .= poly_docx_table($tableRows, $widths, ['border' => true, 'row_heights' => $rowHeights, 'cant_split' => true]);
 
-    $content .= poly_docx_paragraph(
-        poly_docx_run('This is to certify that the above participants are eligible as per records of the Institute', ['bold' => true, 'size' => 18]),
-        ['before' => 100, 'after' => 180]
-    );
-    $content .= poly_docx_table([[
-        poly_docx_paragraph(poly_docx_run('Date: ____________', ['bold' => true, 'size' => 18]), ['align' => 'center']),
-        poly_docx_paragraph(poly_docx_run('Seal of Institute', ['bold' => true, 'size' => 18]), ['align' => 'center']),
-        poly_docx_paragraph(poly_docx_run('Sports Incharge', ['bold' => true, 'size' => 18]), ['align' => 'center']),
-        poly_docx_paragraph(poly_docx_run('Principal', ['bold' => true, 'size' => 18]), ['align' => 'center']),
-    ]], [2730, 2730, 2730, 2730]);
+    if ($includeCertification) {
+        $content .= poly_docx_paragraph(
+            poly_docx_run('This is to certify that the above participants are eligible as per records of the Institute', ['bold' => true, 'size' => 18]),
+            ['before' => 100, 'after' => 180]
+        );
+        $content .= poly_docx_table([[
+            poly_docx_paragraph(poly_docx_run('Date: ____________', ['bold' => true, 'size' => 18]), ['align' => 'center']),
+            poly_docx_paragraph(poly_docx_run('Seal of Institute', ['bold' => true, 'size' => 18]), ['align' => 'center']),
+            poly_docx_paragraph(poly_docx_run('Sports Incharge', ['bold' => true, 'size' => 18]), ['align' => 'center']),
+            poly_docx_paragraph(poly_docx_run('Principal', ['bold' => true, 'size' => 18]), ['align' => 'center']),
+        ]], [2730, 2730, 2730, 2730]);
+    }
 
     return $content;
 }
@@ -375,7 +379,15 @@ function build_polytechnic_eligibility_docx(
         if ($index > 0) {
             $body .= '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
         }
-        $body .= poly_docx_page($game, $event, $academicYear, $pageRows, is_file($logoPath));
+        $body .= poly_docx_page(
+            $game,
+            $event,
+            $academicYear,
+            $pageRows,
+            is_file($logoPath),
+            ($index * 16) + 1,
+            $index === count($pages) - 1
+        );
     }
 
     $document = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'

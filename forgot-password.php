@@ -50,7 +50,7 @@ if ($dev_link !== null) unset($_SESSION['_flash_forgot_devlink']);
 
             <div class="forgot-card-body">
                 <?php if ($flash): ?>
-                    <div class="alert-banner info" style="padding:.75rem 1rem;border-radius:8px;font-size:.85rem;margin-bottom:1.25rem;display:flex;align-items:center;gap:.5rem;background:rgba(13,202,240,.08);color:#055160;border:1px solid rgba(13,202,240,.2)">
+                    <div class="alert-banner info" role="alert" style="padding:.75rem 1rem;border-radius:8px;font-size:.85rem;margin-bottom:1.25rem;display:flex;align-items:center;gap:.5rem;background:rgba(13,202,240,.08);color:#055160;border:1px solid rgba(13,202,240,.2)">
                         <i class="bi bi-info-circle"></i> <?= h($flash['msg']) ?>
                     </div>
                     <?php if ($dev_link): ?>

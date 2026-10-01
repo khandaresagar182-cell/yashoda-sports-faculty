@@ -134,6 +134,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect($back);
     }
 
+    if ($action === 'delete') {
+        $ids = array_values(array_unique(array_filter(array_map(
+            'intval', (array)($_POST['ids'] ?? [])
+        ), static fn($v) => $v > 0)));
+
+        if (!$ids) {
+            flash_set('elig_arch_err', 'Select at least one eligibility form to delete.', 'error');
+            redirect($back);
+        }
+
+        $deletedCount = 0;
+        foreach ($ids as $id) {
+            $row = eligibility_archive_row($id, $deptId);
+            if ($row === null) continue;
+            $abs = eligibility_archive_abs_path($row);
+            if ($abs !== null) {
+                @unlink($abs);
+            }
+            db_execute('DELETE FROM eligibility_archive WHERE id = ? AND department_id = ?', [$id, $deptId], 'ii');
+            $deletedCount++;
+        }
+
+        if ($deletedCount > 0) {
+            error_log(sprintf(
+                '[eligibility_archive] %s (faculty #%d) deleted %d archived eligibility file(s) — dept #%d',
+                $me['username'] ?? '?', (int)($me['id'] ?? 0), $deletedCount, $deptId
+            ));
+            flash_set('elig_arch_ok', "Deleted {$deletedCount} eligibility form(s).", 'success');
+        } else {
+            flash_set('elig_arch_err', 'None of the selected files were found.', 'error');
+        }
+        redirect($back);
+    }
+
     http_response_code(400);
     exit('Bad request.');
 }
@@ -212,6 +246,7 @@ $yearLabel = static fn(string $ay): string => $ay === '' ? 'Unspecified' : $ay;
         .btn{padding:.55rem 1.1rem;border-radius:6px;font-size:.88rem;font-weight:600;cursor:pointer;border:none;text-decoration:none;display:inline-flex;align-items:center;gap:.4rem;transition:var(--transition-smooth)}
         .btn-primary{background:var(--primary-navy);color:var(--white)}.btn-primary:hover{background:var(--primary-navy-dark)}
         .btn-secondary{background:var(--off-white);color:var(--primary-navy);border:1px solid var(--light-gray)}.btn-secondary:hover{background:var(--light-gray)}
+        .btn-danger{background:#fff5f5;color:#c53030;border:1px solid #fed7d7}.btn-danger:hover:not(:disabled){background:#fed7d7}.btn-danger:disabled{opacity:.5;cursor:not-allowed}
         .btn-sm{padding:.35rem .7rem;font-size:.8rem}
         .data-card{background:var(--white);border:1px solid var(--light-gray);border-radius:10px;overflow:hidden}
         .data-card-header{padding:1rem 1.25rem;border-bottom:1px solid var(--light-gray);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem}
@@ -283,9 +318,11 @@ $yearLabel = static fn(string $ay): string => $ay === '' ? 'Unspecified' : $ay;
                     <div class="sidebar-nav-label">Site Content</div>
                     <a href="notices_list.php"><i class="bi bi-megaphone"></i> <span>Notices</span></a>
                     <a href="achievements_list.php"><i class="bi bi-trophy"></i> <span>Achievements</span></a>
+                    <a href="committee_manage.php"><i class="bi bi-people-fill"></i> <span>Committee</span></a>
                     <div class="sidebar-nav-label">Admin</div>
                     <a href="faculty_manage.php"><i class="bi bi-people-fill"></i> <span>Faculty Management</span></a>
                     <a href="document_requirements.php"><i class="bi bi-file-earmark-ruled"></i> <span>Document Requirements</span></a>
+                    <a href="sports_assign.php"><i class="bi bi-trophy-fill"></i> <span>Sports Assignment</span></a>
                 <?php endif; ?>
                 <div class="sidebar-nav-label">Site</div>
                 <a href="../index.php"><i class="bi bi-globe"></i> <span>View Website</span></a>
@@ -297,7 +334,7 @@ $yearLabel = static fn(string $ay): string => $ay === '' ? 'Unspecified' : $ay;
                         <h4><?= h($me['full_name']) ?></h4>
                         <span><?= h($me['department_name'] ?? $me['role']) ?></span>
                     </div>
-                    <a href="logout.php?_csrf=<?= h(csrf_token()) ?>" class="btn-logout" title="Logout"><i class="bi bi-box-arrow-right"></i></a>
+                    <a href="logout.php?_csrf=<?= h(csrf_token()) ?>" class="btn-logout" title="Logout" aria-label="Logout"><i class="bi bi-box-arrow-right"></i></a>
                 </div>
             </div>
         </aside>
@@ -308,8 +345,8 @@ $yearLabel = static fn(string $ay): string => $ay === '' ? 'Unspecified' : $ay;
             </header>
 
             <div class="content-body">
-                <?php if ($ok):  ?><div class="alert-banner success"><i class="bi bi-check-circle"></i> <?= h($ok['msg']) ?></div><?php endif; ?>
-                <?php if ($err): ?><div class="alert-banner error"><i class="bi bi-exclamation-circle"></i> <?= h($err['msg']) ?></div><?php endif; ?>
+                <?php if ($ok):  ?><div class="alert-banner success" role="alert"><i class="bi bi-check-circle"></i> <?= h($ok['msg']) ?></div><?php endif; ?>
+                <?php if ($err): ?><div class="alert-banner error" role="alert"><i class="bi bi-exclamation-circle"></i> <?= h($err['msg']) ?></div><?php endif; ?>
 
                 <?php if ($deptId === null || $deptId <= 0): ?>
                     <div class="page-header">
@@ -377,9 +414,15 @@ $yearLabel = static fn(string $ay): string => $ay === '' ? 'Unspecified' : $ay;
                             <div class="data-card">
                                 <div class="data-card-header">
                                     <h2><?= h($ayDisplay) ?> &mdash; files</h2>
-                                    <label style="font-size:.82rem;color:var(--medium-gray);display:flex;align-items:center;gap:.4rem;cursor:pointer">
-                                        <input type="checkbox" id="selAll"> Select all (whole folder)
-                                    </label>
+                                    <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+                                        <label style="font-size:.82rem;color:var(--medium-gray);display:flex;align-items:center;gap:.4rem;cursor:pointer">
+                                            <input type="checkbox" id="selAll"> Select all (whole folder)
+                                        </label>
+                                        <button type="submit" name="action" value="delete" class="btn btn-danger btn-sm" id="deleteSelBtn" disabled
+                                                onclick="return confirm('Permanently delete the selected eligibility form(s)? This cannot be undone.');">
+                                            <i class="bi bi-trash3"></i> Delete selected
+                                        </button>
+                                    </div>
                                 </div>
                                 <div style="overflow-x:auto">
                                 <table class="data-table">
@@ -398,7 +441,7 @@ $yearLabel = static fn(string $ay): string => $ay === '' ? 'Unspecified' : $ay;
                                     <?php foreach ($files as $f): ?>
                                         <?php $sec = gender_list_options()[(string)($f['gender'] ?? '')] ?? ''; ?>
                                         <tr>
-                                            <td><input type="checkbox" class="fileChk" name="ids[]" value="<?= (int)$f['id'] ?>"></td>
+                                            <td><input type="checkbox" class="fileChk" name="ids[]" value="<?= (int)$f['id'] ?>" aria-label="Select <?= h($f['game_name']) ?> eligibility form"></td>
                                             <td style="font-weight:600;color:var(--primary-navy)"><?= h($f['game_name']) ?></td>
                                             <td><?= $sec !== '' ? '<span class="sec-tag">' . h($sec) . '</span>' : '<span style="color:var(--medium-gray)">&mdash;</span>' ?></td>
                                             <td><?= h((string)($f['event_label'] ?? '')) ?: '<span style="color:var(--medium-gray)">&mdash;</span>' ?></td>
@@ -448,15 +491,25 @@ $yearLabel = static fn(string $ay): string => $ay === '' ? 'Unspecified' : $ay;
         (function () {
             var all = document.getElementById('selAll');
             if (!all) return;
-            var boxes = document.querySelectorAll('.fileChk');
+            var boxes = Array.prototype.slice.call(document.querySelectorAll('.fileChk'));
+            var deleteBtn = document.getElementById('deleteSelBtn');
+
+            function refreshDeleteBtn() {
+                if (deleteBtn) deleteBtn.disabled = !boxes.some(function (b) { return b.checked; });
+            }
+
             all.addEventListener('change', function () {
                 boxes.forEach(function (b) { b.checked = all.checked; });
+                refreshDeleteBtn();
             });
             boxes.forEach(function (b) {
                 b.addEventListener('change', function () {
                     if (!b.checked) all.checked = false;
+                    refreshDeleteBtn();
                 });
             });
+
+            refreshDeleteBtn();
         })();
     </script>
 </body>

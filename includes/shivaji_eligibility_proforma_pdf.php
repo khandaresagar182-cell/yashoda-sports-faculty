@@ -11,6 +11,10 @@
 
 declare(strict_types=1);
 
+if (!defined('SHIVAJI_ELIGIBILITY_ROWS_PER_PAGE')) {
+    define('SHIVAJI_ELIGIBILITY_ROWS_PER_PAGE', 7);
+}
+
 function shivaji_pdf_dob(?string $dob): string
 {
     if ($dob === null || $dob === '' || $dob === '0000-00-00') {
@@ -53,22 +57,6 @@ function shivaji_pdf_class(?string $studyYear, ?string $durationYears): string
     return trim((string)$studyYear);
 }
 
-/** Roman-numeral year, used in the "Present Course" admission sub-column. */
-function shivaji_pdf_roman(?string $studyYear, ?string $durationYears): string
-{
-    $roman = [1 => 'I', 2 => 'II', 3 => 'III', 4 => 'IV', 5 => 'V', 6 => 'VI'];
-    $key = strtolower(trim((string)$studyYear));
-    $ordinalMap = ['first' => 1, 'second' => 2, 'third' => 3];
-    if (isset($ordinalMap[$key])) {
-        return $roman[$ordinalMap[$key]] ?? '';
-    }
-    if ($key === 'final') {
-        $dur = shivaji_pdf_duration_number($durationYears);
-        return $dur !== null ? ($roman[$dur] ?? '') : '';
-    }
-    return '';
-}
-
 /** Heuristic UG/PG split for a free-text Program value. */
 function shivaji_pdf_is_postgraduate(string $program): bool
 {
@@ -81,6 +69,28 @@ function shivaji_pdf_is_postgraduate(string $program): bool
         if (str_starts_with($p, $needle)) return true;
     }
     return false;
+}
+
+/**
+ * Which qualifying exam to print in the "Name of Exam" / "Date & Year"
+ * cells: whichever of HSC/Diploma the student passed most recently
+ * (the larger year). Falls back to whichever single one is filled, or
+ * to HSC (possibly with a blank year) when neither is filled.
+ */
+function shivaji_pdf_qualifying_exam(array $participant): array
+{
+    $hscYear     = trim((string)($participant['hsc_passing_year'] ?? ''));
+    $diplomaYear = trim((string)($participant['diploma_passing_year'] ?? ''));
+
+    if ($hscYear !== '' && $diplomaYear !== '') {
+        return (int)$diplomaYear > (int)$hscYear
+            ? ['label' => 'Diploma', 'year' => $diplomaYear]
+            : ['label' => 'HSC', 'year' => $hscYear];
+    }
+    if ($diplomaYear !== '') {
+        return ['label' => 'Diploma', 'year' => $diplomaYear];
+    }
+    return ['label' => 'HSC', 'year' => $hscYear];
 }
 
 function shivaji_pdf_remarks(array $participant): string
@@ -133,8 +143,9 @@ function draw_shivaji_eligibility_proforma(TCPDF $pdf, array $data): void
     $academicYear    = trim((string)($data['academic_year'] ?? ''));
     $departmentCode  = (string)($data['department_code'] ?? '');
     $departmentName  = (string)($data['department_name'] ?? '');
-    $participants    = array_slice((array)($data['participants'] ?? []), 0, 7);
+    $participants    = array_values((array)($data['participants'] ?? []));
     $startingNumber  = max(1, (int)($data['starting_number'] ?? 1));
+    $includeCertification = (bool)($data['include_certification'] ?? true);
 
     $pdf->SetDrawColor(0, 0, 0);
     $pdf->SetTextColor(0, 0, 0);
@@ -261,8 +272,9 @@ function draw_shivaji_eligibility_proforma(TCPDF $pdf, array $data): void
         ? $ym[1]
         : '';
 
-    for ($slot = 0; $slot < 7; $slot++) {
-        $p = $participants[$slot] ?? [];
+    // The export controller paginates the complete roster. Render every row
+    // it gives this page instead of silently truncating at seven students.
+    foreach ($participants as $slot => $p) {
         $program = trim((string)($p['program'] ?? ''));
         $duration = trim((string)($p['course_duration_years'] ?? ''));
         $studyYear = $p['study_year'] ?? null;
@@ -278,16 +290,17 @@ function draw_shivaji_eligibility_proforma(TCPDF $pdf, array $data): void
         $faUniversity  = trim((string)($p['first_admission_university_year'] ?? '')) ?: $admissionYear;
         $faCourse      = trim((string)($p['first_admission_course_year'] ?? '')) ?: $admissionYear;
         $faClass       = trim((string)($p['first_admission_class_year'] ?? '')) ?: $presentClassYear;
+        $exam          = $program !== '' ? shivaji_pdf_qualifying_exam($p) : ['label' => '', 'year' => ''];
 
-        $values = $p === [] ? array_fill(0, 21, '') : [
+        $values = [
             (string)($startingNumber + $slot) . '.',
             trim((string)($p['full_name'] ?? '')),
             trim((string)($p['mother_name'] ?? '')),
             trim((string)($p['enrollment_no'] ?? '')),
             trim((string)($p['roll_no'] ?? '')),
             shivaji_pdf_dob($p['dob'] ?? null),
-            $program !== '' ? 'HSC' : '',
-            trim((string)($p['hsc_passing_year'] ?? '')),
+            $exam['label'],
+            $exam['year'],
             shivaji_pdf_class($studyYear, $duration),
             $program,
             $duration,
@@ -312,32 +325,34 @@ function draw_shivaji_eligibility_proforma(TCPDF $pdf, array $data): void
         }
     }
 
-    $tableBottom = $tableY + $rowSpanH + (7 * $rowH);
-    $pdf->SetFont('times', '', 9);
-    $pdf->SetXY(10, $tableBottom + 4.0);
-    $pdf->Cell(277, 5, 'Certified that the above particulars are true as per records of the College', 0, 0, 'L');
-    $pdf->SetXY(10, $tableBottom + 10.0);
-    $pdf->Cell(277, 5, 'Certified the above players are not employed on full time basis.', 0, 0, 'L');
+    $tableBottom = $tableY + $rowSpanH + (count($participants) * $rowH);
+    if ($includeCertification) {
+        $pdf->SetFont('times', '', 9);
+        $pdf->SetXY(10, $tableBottom + 4.0);
+        $pdf->Cell(277, 5, 'Certified that the above particulars are true as per records of the College', 0, 0, 'L');
+        $pdf->SetXY(10, $tableBottom + 10.0);
+        $pdf->Cell(277, 5, 'Certified the above players are not employed on full time basis.', 0, 0, 'L');
 
-    $footerY = $tableBottom + 20.0;
-    $pdf->SetXY(12, $footerY);
-    $pdf->Cell(39, 5, 'Date: ______________', 0, 0, 'L');
+        $footerY = $tableBottom + 20.0;
+        $pdf->SetXY(12, $footerY);
+        $pdf->Cell(39, 5, 'Date: ______________', 0, 0, 'L');
 
-    $pdf->SetLineStyle(['width' => 0.25, 'dash' => '2,2']);
-    $pdf->Circle(52, $footerY + 12, 9);
-    $pdf->SetLineStyle(['width' => 0.2, 'dash' => 0]);
-    $pdf->SetFont('times', '', 7.2);
-    $pdf->SetXY(43, $footerY + 8.5);
-    $pdf->MultiCell(18, 3.4, "Seal of the\nCollege", 0, 'C');
+        $pdf->SetLineStyle(['width' => 0.25, 'dash' => '2,2']);
+        $pdf->Circle(52, $footerY + 12, 9);
+        $pdf->SetLineStyle(['width' => 0.2, 'dash' => 0]);
+        $pdf->SetFont('times', '', 7.2);
+        $pdf->SetXY(43, $footerY + 8.5);
+        $pdf->MultiCell(18, 3.4, "Seal of the\nCollege", 0, 'C');
 
-    $pdf->SetFont('times', 'B', 9);
-    $pdf->SetXY(101, $footerY + 9);
-    $pdf->Cell(85, 5, 'Director of Physical Education', 0, 0, 'C');
-    $pdf->SetXY(208, $footerY + 9);
-    $pdf->Cell(70, 5, 'Principal', 0, 0, 'C');
-    $pdf->SetFont('times', '', 7.5);
-    $pdf->SetXY(101, $footerY + 14);
-    $pdf->Cell(85, 5, 'Signature of the Director of Physical Education', 0, 0, 'C');
-    $pdf->SetXY(208, $footerY + 14);
-    $pdf->Cell(70, 5, 'Signature of the Principal', 0, 0, 'C');
+        $pdf->SetFont('times', 'B', 9);
+        $pdf->SetXY(101, $footerY + 9);
+        $pdf->Cell(85, 5, 'Director of Physical Education', 0, 0, 'C');
+        $pdf->SetXY(208, $footerY + 9);
+        $pdf->Cell(70, 5, 'Principal', 0, 0, 'C');
+        $pdf->SetFont('times', '', 7.5);
+        $pdf->SetXY(101, $footerY + 14);
+        $pdf->Cell(85, 5, 'Signature of the Director of Physical Education', 0, 0, 'C');
+        $pdf->SetXY(208, $footerY + 14);
+        $pdf->Cell(70, 5, 'Signature of the Principal', 0, 0, 'C');
+    }
 }

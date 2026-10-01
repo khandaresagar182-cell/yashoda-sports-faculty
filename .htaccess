@@ -12,11 +12,19 @@ Options -Indexes
     Require all denied
 </FilesMatch>
 
-# Block internal folders — generic (works when app is at docroot, e.g. cPanel)
-RedirectMatch 403 ^/(includes|sql|sessions)/.*$
+# Developer docs and PowerShell build scripts describe the deployment (host
+# identifiers, default logins). They are excluded from the production zip; this
+# rule is defence in depth for any host where they still end up in the docroot.
+<FilesMatch "\.(md|ps1)$">
+    Require all denied
+</FilesMatch>
+
+# Block internal folders — generic (works when app is at docroot, e.g. cPanel).
+# vendor/ is only ever loaded by PHP (require), never fetched over HTTP.
+RedirectMatch 403 ^/(includes|sql|sessions|scripts|docs|vendor)/.*$
 
 # Block internal folders — subfolder deploy (XAMPP / htdocs/<projectname>/)
-RedirectMatch 403 ^/[^/]+/(includes|sql|sessions)/.*$
+RedirectMatch 403 ^/[^/]+/(includes|sql|sessions|scripts|docs|vendor)/.*$
 
 
 # Force trailing-slash consistency (placeholder for future routing)
@@ -26,7 +34,7 @@ RedirectMatch 403 ^/[^/]+/(includes|sql|sessions)/.*$
     # Serve uploaded files through PHP for reliable access on shared hosting.
     # Prevents 403/404 caused by LiteSpeed/ModSecurity restrictions on Namecheap etc.
     # Rewrites:  /uploads/documents/abc.pdf  →  serve_file.php?f=documents/abc.pdf
-    RewriteCond %{REQUEST_URI} ^/uploads/(documents|students|achievements|notices)/ [NC]
+    RewriteCond %{REQUEST_URI} ^/uploads/(documents|students|achievements|notices|external|committee)/ [NC]
     RewriteRule ^uploads/(.+)$ serve_file.php?f=$1 [L,QSA]
 </IfModule>
 

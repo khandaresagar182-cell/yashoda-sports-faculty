@@ -326,9 +326,11 @@ function dr_type_value(?string $mime): string
                 <div class="sidebar-nav-label">Site Content</div>
                 <a href="notices_list.php"><i class="bi bi-megaphone"></i> <span>Notices</span></a>
                 <a href="achievements_list.php"><i class="bi bi-trophy"></i> <span>Achievements</span></a>
+                <a href="committee_manage.php"><i class="bi bi-people-fill"></i> <span>Committee</span></a>
                 <div class="sidebar-nav-label">Admin</div>
                 <a href="faculty_manage.php"><i class="bi bi-people-fill"></i> <span>Faculty Management</span></a>
                 <a href="document_requirements.php" class="active"><i class="bi bi-file-earmark-ruled"></i> <span>Document Requirements</span></a>
+                <a href="sports_assign.php"><i class="bi bi-trophy-fill"></i> <span>Sports Assignment</span></a>
                 <div class="sidebar-nav-label">Site</div>
                 <a href="../index.php"><i class="bi bi-globe"></i> <span>View Website</span></a>
             </nav>
@@ -339,7 +341,7 @@ function dr_type_value(?string $mime): string
                         <h4><?= h($me['full_name']) ?></h4>
                         <span><?= h($me['role']) ?></span>
                     </div>
-                    <a href="logout.php?_csrf=<?= h(csrf_token()) ?>" class="btn-logout" title="Logout"><i class="bi bi-box-arrow-right"></i></a>
+                    <a href="logout.php?_csrf=<?= h(csrf_token()) ?>" class="btn-logout" title="Logout" aria-label="Logout"><i class="bi bi-box-arrow-right"></i></a>
                 </div>
             </div>
         </aside>
@@ -355,8 +357,8 @@ function dr_type_value(?string $mime): string
             </header>
 
             <div class="content-body">
-                <?php if ($ok): ?><div class="alert-banner success"><i class="bi bi-check-circle"></i> <?= h($ok['msg']) ?></div><?php endif; ?>
-                <?php if ($err): ?><div class="alert-banner error"><i class="bi bi-exclamation-circle"></i> <?= h($err['msg']) ?></div><?php endif; ?>
+                <?php if ($ok): ?><div class="alert-banner success" role="alert"><i class="bi bi-check-circle"></i> <?= h($ok['msg']) ?></div><?php endif; ?>
+                <?php if ($err): ?><div class="alert-banner error" role="alert"><i class="bi bi-exclamation-circle"></i> <?= h($err['msg']) ?></div><?php endif; ?>
 
                 <?php if ($action === 'new' || $action === 'edit'):
                     $isEdit   = $action === 'edit';
@@ -416,13 +418,13 @@ function dr_type_value(?string $mime): string
                     <form method="get" action="document_requirements.php" class="toolbar">
                         <div class="form-group">
                             <label for="dept">Faculty / Department</label>
-                            <select id="dept" name="dept" onchange="this.form.submit()">
+                            <select id="dept" name="dept">
                                 <?php foreach ($departments as $d): ?>
                                     <option value="<?= (int)$d['id'] ?>" <?= (int)$d['id'] === $dept_id ? 'selected' : '' ?>><?= h($d['name']) ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        <noscript><button type="submit" class="btn btn-secondary">Go</button></noscript>
+                        <button type="submit" class="btn btn-secondary">Go</button>
                     </form>
 
                     <form method="post" action="document_requirements.php" style="margin-bottom:1.25rem"
@@ -475,7 +477,7 @@ function dr_type_value(?string $mime): string
                                             <input type="hidden" name="do" value="delete">
                                             <input type="hidden" name="dept" value="<?= $dept_id ?>">
                                             <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
-                                            <button class="btn btn-danger" style="padding:.3rem .6rem;font-size:.78rem"><i class="bi bi-trash"></i></button>
+                                            <button class="btn btn-danger" style="padding:.3rem .6rem;font-size:.78rem" title="Delete <?= h($r['document_name']) ?>" aria-label="Delete <?= h($r['document_name']) ?>"><i class="bi bi-trash"></i></button>
                                         </form>
                                     </td>
                                 </tr>

@@ -93,6 +93,8 @@ function draw_eligibility_form(TCPDF $pdf, array $data): void
     $logoPath      = (string)($data['logo_path'] ?? '');
     $rowCount      = max(0, min(16, (int)($data['row_count'] ?? count((array)($data['participants'] ?? [])))));
     $participants  = array_slice((array)($data['participants'] ?? []), 0, $rowCount);
+    $startingNumber = max(1, (int)($data['starting_number'] ?? 1));
+    $includeCertification = (bool)($data['include_certification'] ?? true);
 
     $pageW = 210.0;
     $left  = 14.7;
@@ -256,7 +258,7 @@ function draw_eligibility_form(TCPDF $pdf, array $data): void
         $y = $tableY + $headerH + (($row - 1) * $rowH);
         $participant = $participants[$row - 1] ?? [];
         $values = [
-            (string)$row,
+            (string)($startingNumber + $row - 1),
             trim((string)($participant['full_name'] ?? '')),
             eligibility_year_course(
                 isset($participant['study_year']) ? (string)$participant['study_year'] : null,
@@ -290,25 +292,27 @@ function draw_eligibility_form(TCPDF $pdf, array $data): void
     }
 
     $tableBottom = $tableY + $headerH + ($rowCount * $rowH);
-    $pdf->SetFont('times', 'B', 10.5);
-    $pdf->SetXY(17.2, $tableBottom + 3.0);
-    $pdf->Cell(
-        176,
-        6,
-        'This is to certify that the above participants are eligible as per records of the Institute',
-        0,
-        0,
-        'L'
-    );
+    if ($includeCertification) {
+        $pdf->SetFont('times', 'B', 10.5);
+        $pdf->SetXY(17.2, $tableBottom + 3.0);
+        $pdf->Cell(
+            176,
+            6,
+            'This is to certify that the above participants are eligible as per records of the Institute',
+            0,
+            0,
+            'L'
+        );
 
-    $pdf->SetFont('times', 'B', 10.5);
-    $footerY = min(287.0, $tableBottom + 16.0);
-    $pdf->SetXY(22.5, $footerY);
-    $pdf->Cell(35, 5, 'Date: ____________', 0, 0, 'L');
-    $pdf->SetXY(67.5, $footerY);
-    $pdf->Cell(40, 5, 'Seal of Institute', 0, 0, 'C');
-    $pdf->SetXY(112.5, $footerY);
-    $pdf->Cell(40, 5, 'Sports Incharge', 0, 0, 'C');
-    $pdf->SetXY(165.0, $footerY);
-    $pdf->Cell(25, 5, 'Principal', 0, 0, 'C');
+        $pdf->SetFont('times', 'B', 10.5);
+        $footerY = min(287.0, $tableBottom + 16.0);
+        $pdf->SetXY(22.5, $footerY);
+        $pdf->Cell(35, 5, 'Date: ____________', 0, 0, 'L');
+        $pdf->SetXY(67.5, $footerY);
+        $pdf->Cell(40, 5, 'Seal of Institute', 0, 0, 'C');
+        $pdf->SetXY(112.5, $footerY);
+        $pdf->Cell(40, 5, 'Sports Incharge', 0, 0, 'C');
+        $pdf->SetXY(165.0, $footerY);
+        $pdf->Cell(25, 5, 'Principal', 0, 0, 'C');
+    }
 }

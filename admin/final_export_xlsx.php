@@ -52,7 +52,7 @@ $rows = db_select(
             s.study_year, s.program, s.course_duration_years,
             s.admission_year, s.academic_year,
             s.first_admission_university_year, s.first_admission_course_year, s.first_admission_class_year,
-            s.hsc_passing_year, s.has_gap_year, s.gap_year_detail,
+            s.hsc_passing_year, s.diploma_passing_year, s.has_gap_year, s.gap_year_detail,
             s.mobile, s.bank_account_number, s.bank_ifsc,
             d.code AS dept_code, d.name AS dept_name
        FROM final_teams ft
@@ -141,7 +141,7 @@ if ($isPolytechnic) {
 } else {
     $columns = [
         'Sr. No.', 'Name of the Player', "Mother's Name", 'University P.R.N. No.',
-        'Roll No.', 'Date of Birth', 'H.S.C. Exam', 'H.S.C. Date & Year',
+        'Roll No.', 'Date of Birth', 'Name of Exam', 'Date & Year',
         'Present Class', 'Name of Present Course', 'Duration of Course',
         'First Admission — University/College', 'First Admission — Present Course',
         'First Admission — Present Class',
@@ -163,6 +163,7 @@ if ($isPolytechnic) {
         $faUniversity  = trim((string)($r['first_admission_university_year'] ?? '')) ?: $admissionYear;
         $faCourse      = trim((string)($r['first_admission_course_year'] ?? '')) ?: $admissionYear;
         $faClass       = trim((string)($r['first_admission_class_year'] ?? '')) ?: $presentClassYear;
+        $exam          = $program !== '' ? shivaji_docx_qualifying_exam($r) : ['label' => '', 'year' => ''];
 
         $cells = [
             [$sr, 'Number'],
@@ -171,8 +172,8 @@ if ($isPolytechnic) {
             [trim((string)($r['enrollment_no'] ?? '')), 'String'],
             [trim((string)($r['roll_no'] ?? '')), 'String'],
             [shivaji_docx_dob($r['dob'] ?? null), 'String'],
-            [$program !== '' ? 'HSC' : '', 'String'],
-            [trim((string)($r['hsc_passing_year'] ?? '')), 'String'],
+            [$exam['label'], 'String'],
+            [$exam['year'], 'String'],
             [shivaji_docx_class($r['study_year'] ?? null, $duration), 'String'],
             [$program, 'String'],
             [$duration, 'String'],

@@ -1,12 +1,12 @@
 <?php
 /**
- * Student forgot-password.
- * Step 1: enter email -> we look up the student.
- * Step 2: show their username (email) and the new password (their DOB in DDMMYYYY)
- *         on screen. They can copy and use it to log in.
+ * Student forgot-password. Enter an email, get an emailed reset link —
+ * same token-based flow as the faculty forgot-password page
+ * (forgot-password.php / student_reset_password.php handles the link).
  *
- * The "step 2" is rendered on the same page via a flash payload
- * so we don't need a separate URL.
+ * Never reveals whether the account exists: the success message is the
+ * same generic text either way, and only a real click on the emailed
+ * link (student_reset_password.php) can actually change the password.
  */
 
 declare(strict_types=1);
@@ -19,8 +19,7 @@ if (current_student()) {
 
 $flash_err = flash_get('student_forgot_error');
 $flash_ok  = flash_get('student_forgot_ok');
-$reset     = $_SESSION['_student_reset_show'] ?? null;
-if ($reset !== null) unset($_SESSION['_student_reset_show']);
+$dev_link  = $flash_ok['meta']['dev_link'] ?? null;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -40,6 +39,7 @@ if ($reset !== null) unset($_SESSION['_student_reset_show']);
         body { background: var(--primary-navy-dark); display:flex; flex-direction:column; min-height:100vh; }
         .forgot-page { flex:1; display:flex; align-items:center; justify-content:center; padding:2rem 1rem; position:relative; overflow:hidden; }
         .forgot-page::before { content:''; position:absolute; inset:-50%; background: radial-gradient(circle at 20% 50%, rgba(201,162,39,.08) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(114,47,55,.06) 0%, transparent 50%); animation: bgShift 15s ease-in-out infinite alternate; }
+        @media (prefers-reduced-motion: reduce) { .forgot-page::before { animation: none; } }
         @keyframes bgShift { 0% { transform: translate(0,0) rotate(0deg); } 100% { transform: translate(-3%,-3%) rotate(2deg); } }
         .forgot-card { position:relative; z-index:1; width:100%; max-width:480px; background:#fff; border-radius:14px; box-shadow:0 12px 40px rgba(0,0,0,.25), 0 4px 12px rgba(0,0,0,.15); overflow:hidden; animation: cardEntry .6s ease-out; }
         @keyframes cardEntry { from { opacity:0; transform: translateY(30px) scale(.97); } to { opacity:1; transform: translateY(0) scale(1); } }
@@ -70,13 +70,6 @@ if ($reset !== null) unset($_SESSION['_student_reset_show']);
         .alert-danger, .alert-info { padding:.7rem .9rem; border-radius:8px; font-size:.85rem; margin-bottom:1.1rem; display:flex; align-items:center; gap:.5rem; }
         .alert-danger { background: rgba(220,53,69,.1); color:#842029; border:1px solid rgba(220,53,69,.2); }
         .alert-info { background: rgba(13,202,240,.1); color:#055160; border:1px solid rgba(13,202,240,.2); }
-        .cred-row { display:flex; align-items:stretch; border:2px solid var(--light-gray); border-radius:8px; overflow:hidden; margin-bottom:.85rem; }
-        .cred-label { background: var(--off-white); padding:.65rem .9rem; min-width:120px; display:flex; align-items:center; gap:.5rem; font-size:.78rem; font-weight:700; color: var(--primary-navy); text-transform:uppercase; letter-spacing:.3px; border-right:1px solid var(--light-gray); }
-        .cred-label i { color: var(--accent-gold); font-size:.95rem; }
-        .cred-value { flex:1; padding:.65rem .9rem; font-family: 'Courier New', monospace; font-size:1rem; font-weight:600; color: var(--text-dark); background:#fff; display:flex; align-items:center; word-break: break-all; }
-        .btn-copy { background: var(--accent-gold); color:#fff; border:none; padding:0 .8rem; cursor:pointer; font-size:.8rem; font-weight:600; min-width:60px; }
-        .btn-copy:hover { background:#d4b84a; }
-        .btn-copy.copied { background:#1e7e34; }
         .warn-box { background: rgba(255,193,7,.1); border:1px solid rgba(255,193,7,.3); color:#664d03; padding:.7rem .85rem; border-radius:8px; font-size:.8rem; line-height:1.5; margin-bottom:1rem; }
         .warn-box i { color:#856404; margin-right:.3rem; }
         @media (max-width: 576px) {
@@ -87,10 +80,6 @@ if ($reset !== null) unset($_SESSION['_student_reset_show']);
             .forgot-card-header h1 { font-size: 1rem; }
             .forgot-icon { width: 48px; height: 48px; }
             .login-footer p { font-size: .75rem; }
-            .cred-row { flex-direction: column; }
-            .cred-label { min-width: auto; border-right: none; border-bottom: 1px solid var(--light-gray); padding: .5rem .75rem; font-size: .72rem; }
-            .cred-value { font-size: .9rem; padding: .55rem .75rem; }
-            .btn-copy { padding: .55rem .75rem; min-width: auto; }
         }
     </style>
 </head>
@@ -105,32 +94,24 @@ if ($reset !== null) unset($_SESSION['_student_reset_show']);
 
             <div class="forgot-card-body">
                 <?php if ($flash_err): ?>
-                    <div class="alert-danger"><i class="bi bi-exclamation-circle"></i> <?= h($flash_err['msg']) ?></div>
+                    <div class="alert-danger" role="alert"><i class="bi bi-exclamation-circle"></i> <?= h($flash_err['msg']) ?></div>
                 <?php endif; ?>
 
-                <?php if ($reset): ?>
-                    <div class="alert-info"><i class="bi bi-check-circle"></i> Your password has been reset to your date of birth. Use the credentials below to sign in.</div>
-                    <div class="warn-box">
-                        <i class="bi bi-exclamation-triangle-fill"></i>
-                        <strong>Important:</strong> Save these credentials now. You can change your password from your dashboard at any time.
-                    </div>
-                    <div class="cred-row">
-                        <div class="cred-label"><i class="bi bi-person"></i> Username</div>
-                        <div class="cred-value" id="credUser"><?= h($reset['email']) ?></div>
-                        <button type="button" class="btn-copy" data-copy="credUser">Copy</button>
-                    </div>
-                    <div class="cred-row">
-                        <div class="cred-label"><i class="bi bi-key"></i> Password</div>
-                        <div class="cred-value" id="credPass"><?= h($reset['password']) ?></div>
-                        <button type="button" class="btn-copy" data-copy="credPass">Copy</button>
-                    </div>
+                <?php if ($flash_ok): ?>
+                    <div class="alert-info" role="alert"><i class="bi bi-envelope-check"></i> <?= h($flash_ok['msg']) ?></div>
+                    <?php if ($dev_link): ?>
+                        <div class="warn-box" style="word-break:break-all">
+                            <strong style="display:block;margin-bottom:.3rem"><i class="bi bi-tools"></i> Dev only:</strong>
+                            <a href="<?= h($dev_link) ?>"><?= h($dev_link) ?></a>
+                        </div>
+                    <?php endif; ?>
                     <a href="student-login.php" class="btn-submit" style="display:inline-flex; align-items:center; justify-content:center; text-decoration:none; margin-top:.4rem">
-                        <i class="bi bi-box-arrow-in-right"></i> Go to Login
+                        <i class="bi bi-arrow-left"></i> Back to Login
                     </a>
                 <?php else: ?>
                     <p class="instruction-text">
-                        Enter the email you used to register. We'll reset your password back to your
-                        date of birth (DDMMYYYY) and show it on screen so you can sign in.
+                        Enter the email you used to register. If we find a matching account, we'll email you
+                        a link to choose a new password.
                     </p>
                     <form method="post" action="student_forgot_process.php">
                         <?= csrf_field() ?>
@@ -144,7 +125,7 @@ if ($reset !== null) unset($_SESSION['_student_reset_show']);
                             </div>
                         </div>
                         <button type="submit" class="btn-submit">
-                            <i class="bi bi-arrow-repeat"></i> Reset My Password
+                            <i class="bi bi-send"></i> Send Reset Link
                         </button>
                     </form>
                 <?php endif; ?>
@@ -159,38 +140,5 @@ if ($reset !== null) unset($_SESSION['_student_reset_show']);
     <footer class="login-footer">
         <p>&copy; 2026 <a href="index.php">YSPM's Yashoda Technical Campus, Satara</a>. All Rights Reserved.</p>
     </footer>
-
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            document.querySelectorAll('.btn-copy[data-copy]').forEach(function (btn) {
-                btn.addEventListener('click', function () {
-                    var el = document.getElementById(btn.getAttribute('data-copy'));
-                    if (!el) return;
-                    var text = el.textContent.trim();
-                    function showCopied() {
-                        var orig = btn.textContent;
-                        btn.textContent = 'Copied!';
-                        btn.classList.add('copied');
-                        setTimeout(function () { btn.textContent = orig; btn.classList.remove('copied'); }, 1500);
-                    }
-                    if (navigator.clipboard && window.isSecureContext) {
-                        navigator.clipboard.writeText(text).then(showCopied).catch(function () {
-                            var ta = document.createElement('textarea');
-                            ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
-                            document.body.appendChild(ta); ta.select();
-                            try { document.execCommand('copy'); } catch (e) {}
-                            document.body.removeChild(ta); showCopied();
-                        });
-                    } else {
-                        var ta = document.createElement('textarea');
-                        ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
-                        document.body.appendChild(ta); ta.select();
-                        try { document.execCommand('copy'); } catch (e) {}
-                        document.body.removeChild(ta); showCopied();
-                    }
-                });
-            });
-        });
-    </script>
 </body>
 </html>

@@ -654,7 +654,8 @@ a:hover {
     animation: ticker-scroll 30s linear infinite;
     white-space: nowrap;
 }
-.ticker-content:hover {
+.ticker-content:hover,
+.ticker-content:focus-within {
     animation-play-state: paused;
 }
 .ticker-item {
@@ -1346,9 +1347,9 @@ a:hover {
     transition: var(--transition-smooth);
     outline: none;
 }
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
+.form-group input:focus-visible,
+.form-group select:focus-visible,
+.form-group textarea:focus-visible {
     border-color: var(--primary-navy);
     box-shadow: 0 0 0 3px rgba(26, 54, 93, 0.1);
 }
@@ -1692,6 +1693,64 @@ a:hover {
 @media (prefers-reduced-motion: reduce) {
     .ticker-content { animation: none; }
     * { transition: none !important; animation: none !important; }
+}
+
+/* ============================================================ */
+/* WIDE-SCREEN LAYOUT POLISH                                     */
+/* Bootstrap's .container caps at 1320px and centres, so on big  */
+/* monitors the logo and hero copy drift toward the middle with  */
+/* wide empty gutters. Pull the header brand into the true       */
+/* top-left corner, start the hero copy at the left edge, and    */
+/* stop the primary nav from clipping the login links between    */
+/* roughly 1360-1700px.                                          */
+/* ============================================================ */
+
+/* Roomier page container on large screens (was hard-capped 1320px). */
+@media (min-width: 1200px) {
+    .container {
+        max-width: 1600px;
+        padding-left: clamp(1.25rem, 3vw, 2.5rem);
+        padding-right: clamp(1.25rem, 3vw, 2.5rem);
+    }
+}
+
+/* Header + hero run edge-to-edge with a comfortable fluid gutter,
+   so the logo sits in the corner and the headline starts at the left. */
+.main-header .navbar > .container,
+.hero-section > .container {
+    max-width: none;
+    padding-left: clamp(1rem, 4vw, 3.5rem);
+    padding-right: clamp(1rem, 4vw, 3.5rem);
+}
+
+/* Primary navigation: allow a graceful wrap as an absolute last resort
+   (very narrow desktop), but tighten spacing hard through the laptop
+   range so all seven items + the login pill stay on one row. */
+.navbar-nav { column-gap: 0.15rem; }
+
+@media (min-width: 992px) {
+    .navbar-nav {
+        flex-wrap: wrap;
+        row-gap: 0.4rem;
+        justify-content: flex-end;
+    }
+}
+
+.nav-link { padding: 0.5rem 0.62rem !important; }
+
+@media (min-width: 992px) and (max-width: 1599px) {
+    .navbar-nav { column-gap: 0.06rem; }
+    .nav-link { padding: 0.4rem 0.42rem !important; font-size: 0.8rem; }
+    .nav-link i { margin-right: 0.22rem; font-size: 0.78rem; }
+    .btn-admin-login {
+        margin-left: 0.2rem;
+        padding: 0.34rem 0.72rem 0.34rem 0.34rem !important;
+        font-size: 0.78rem;
+    }
+    .faculty-login-icon { width: 26px; height: 26px; }
+    .college-logo { width: 58px; height: 58px; }
+    .college-name { font-size: 1.05rem; }
+    .college-affiliation { max-width: 20rem; }
 }
 
 /* ============================================ */

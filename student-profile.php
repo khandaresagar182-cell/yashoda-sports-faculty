@@ -279,6 +279,7 @@ if (!$is_new && $student) {
         .game-picker-bar { height:4px; background:#e5e7eb; border-radius:2px; overflow:hidden; margin-bottom:.85rem; }
         .game-picker-bar > div { height:100%; background: linear-gradient(90deg, #1a365d, #2c5282); transition: width .2s ease; width:0; }
         .game-picker-error { color:#c53030; font-weight:600; font-size:.78rem; margin-top:.5rem; min-height:1.1em; }
+        .doc-field-error { color:#c53030; font-weight:600; font-size:.76rem; margin-top:.3rem; min-height:1.1em; }
 
         /* Game chips (read-only display in record card) */
         .game-chip { display:inline-flex; align-items:center; gap:.35rem; padding:.2rem .55rem; background: rgba(26,54,93,.08); color:#0a1f3d; border:1px solid rgba(26,54,93,.18); border-radius:3px; font-size:.78rem; font-weight:600; margin:.1rem .2rem .1rem 0; }
@@ -335,7 +336,7 @@ if (!$is_new && $student) {
                         <h4><?= h($me['full_name']) ?></h4>
                         <span><?= h($me['department_name'] ?? $me['role']) ?></span>
                     </div>
-                    <a href="admin/logout.php?_csrf=<?= h(csrf_token()) ?>" class="btn-logout" title="Logout"><i class="bi bi-box-arrow-right"></i></a>
+                    <a href="admin/logout.php?_csrf=<?= h(csrf_token()) ?>" class="btn-logout" title="Logout" aria-label="Logout"><i class="bi bi-box-arrow-right"></i></a>
                 </div>
             </div>
         </aside>
@@ -359,12 +360,12 @@ if (!$is_new && $student) {
 
             <div class="content-body">
                 <?php if ($ok_flash): ?>
-                    <div class="alert-banner success" style="padding:.8rem 1rem;border-radius:8px;margin-bottom:1.25rem;font-size:.9rem;display:flex;align-items:center;gap:.5rem;background:rgba(25,135,84,.1);color:#0a3622;border:1px solid rgba(25,135,84,.2)">
+                    <div class="alert-banner success" role="alert" style="padding:.8rem 1rem;border-radius:8px;margin-bottom:1.25rem;font-size:.9rem;display:flex;align-items:center;gap:.5rem;background:rgba(25,135,84,.1);color:#0a3622;border:1px solid rgba(25,135,84,.2)">
                         <i class="bi bi-check-circle"></i> <?= h($ok_flash['msg']) ?>
                     </div>
                 <?php endif; ?>
                 <?php if ($err_flash): ?>
-                    <div class="alert-banner error" style="padding:.8rem 1rem;border-radius:8px;margin-bottom:1.25rem;font-size:.9rem;display:flex;align-items:center;gap:.5rem;background:rgba(220,53,69,.1);color:#842029;border:1px solid rgba(220,53,69,.2)">
+                    <div class="alert-banner error" role="alert" style="padding:.8rem 1rem;border-radius:8px;margin-bottom:1.25rem;font-size:.9rem;display:flex;align-items:center;gap:.5rem;background:rgba(220,53,69,.1);color:#842029;border:1px solid rgba(220,53,69,.2)">
                         <i class="bi bi-exclamation-circle"></i> <?= h($err_flash['msg']) ?>
                     </div>
                 <?php endif; ?>
@@ -466,7 +467,7 @@ if (!$is_new && $student) {
                                     <tr>
                                         <td class="rec-label">Roll No.</td>
                                         <td class="rec-value"><?= h($student['roll_no'] ?: '-') ?></td>
-                                        <?php if (in_array($student['department_code'] ?? '', ['engineering', 'pharmacy', 'ytc_pharmacy', 'management', 'architecture'], true)): ?>
+                                        <?php if (in_array($student['department_code'] ?? '', ['engineering', 'pharmacy', 'management', 'architecture'], true)): ?>
                                             <td class="rec-label">Enrollment No.</td>
                                             <td class="rec-value"><?= h($student['enrollment_no']) ?></td>
                                         <?php else: ?>
@@ -502,8 +503,32 @@ if (!$is_new && $student) {
                                     <td class="rec-value"><?= h($student['mobile'] ?: '—') ?></td>
                                 </tr>
                                 <tr>
-                                    <td class="rec-label">Address</td>
-                                    <td class="rec-value" colspan="3"><?= h($student['address'] ?: '—') ?></td>
+                                    <td class="rec-label">WhatsApp No.</td>
+                                    <td class="rec-value"><?= h($student['whatsapp_no'] ?: '—') ?></td>
+                                    <td class="rec-label"></td>
+                                    <td class="rec-value"></td>
+                                </tr>
+                                <tr>
+                                    <td class="rec-label">Permanent Address</td>
+                                    <td class="rec-value" colspan="3"><?= h($student['permanent_address'] ?: $student['address'] ?: '—') ?></td>
+                                </tr>
+                                <tr>
+                                    <td class="rec-label">Current Address</td>
+                                    <td class="rec-value" colspan="3"><?= h($student['current_address'] ?: '—') ?></td>
+                                </tr>
+
+                                <tr class="record-section-row"><td colspan="4"><i class="bi bi-bank"></i> Bank Details</td></tr>
+                                <tr>
+                                    <td class="rec-label">Account Number</td>
+                                    <td class="rec-value"><?= h($student['bank_account_number'] ?: '—') ?></td>
+                                    <td class="rec-label">IFSC Code</td>
+                                    <td class="rec-value"><?= h($student['bank_ifsc'] ?: '—') ?></td>
+                                </tr>
+                                <tr>
+                                    <td class="rec-label">Bank Name</td>
+                                    <td class="rec-value"><?= h($student['bank_name'] ?: '—') ?></td>
+                                    <td class="rec-label">Branch</td>
+                                    <td class="rec-value"><?= h($student['bank_branch'] ?: '—') ?></td>
                                 </tr>
 
                                 <?php
@@ -686,7 +711,7 @@ if (!$is_new && $student) {
                                                         <?= csrf_field() ?>
                                                         <input type="hidden" name="ach_id" value="<?= (int)$ach['id'] ?>">
                                                         <input type="hidden" name="student_id" value="<?= (int)$student['id'] ?>">
-                                                        <button type="submit" style="background:none;border:none;color:#c53030;cursor:pointer;font-size:.85rem" title="Delete"><i class="bi bi-trash3"></i></button>
+                                                        <button type="submit" style="background:none;border:none;color:#c53030;cursor:pointer;font-size:.85rem" title="Delete" aria-label="Delete achievement — <?= h($ach['title'] ?: $ach['event_name'] ?: 'entry') ?>"><i class="bi bi-trash3"></i></button>
                                                     </form>
                                                 </td>
                                             </tr>
@@ -804,9 +829,40 @@ if (!$is_new && $student) {
                                     <label for="mobile">Mobile No. *</label>
                                     <input type="tel" id="mobile" name="mobile" placeholder="10-digit mobile number" required pattern="[0-9]{10}" maxlength="10" inputmode="numeric" value="<?= h($student['mobile'] ?? '') ?>">
                                 </div>
+                                <div class="form-group">
+                                    <label for="whatsapp_no">WhatsApp No.</label>
+                                    <input type="tel" id="whatsapp_no" name="whatsapp_no" placeholder="Leave blank if same as Mobile No." pattern="[0-9]{10}" maxlength="10" inputmode="numeric" value="<?= h($student['whatsapp_no'] ?? '') ?>">
+                                </div>
                                 <div class="form-group" style="grid-column:1/-1">
-                                    <label for="address">Address *</label>
-                                    <input type="text" id="address" name="address" required maxlength="500" placeholder="House no / street, area, city, state, pincode" value="<?= h($student['address'] ?? '') ?>">
+                                    <label for="permanent_address">Permanent Address</label>
+                                    <input type="text" id="permanent_address" name="permanent_address" maxlength="500" placeholder="House no / street, area, city, state, pincode" value="<?= h($student['permanent_address'] ?? $student['address'] ?? '') ?>">
+                                </div>
+                                <div class="form-group" style="grid-column:1/-1">
+                                    <label for="current_address">Current Address</label>
+                                    <input type="text" id="current_address" name="current_address" maxlength="500" placeholder="House no / street, area, city, state, pincode" value="<?= h($student['current_address'] ?? '') ?>">
+                                </div>
+                            </div>
+
+                            <!-- Bank -->
+                            <h3 style="font-size:.88rem;font-weight:700;color:var(--primary-navy);margin:1.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--light-gray)">
+                                <i class="bi bi-bank" style="color:var(--accent-gold);margin-right:.4rem"></i> Bank Details
+                            </h3>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="bank_account_number">Account Number</label>
+                                    <input type="text" id="bank_account_number" name="bank_account_number" maxlength="30" placeholder="Bank account number" value="<?= h($student['bank_account_number'] ?? '') ?>">
+                                </div>
+                                <div class="form-group">
+                                    <label for="bank_ifsc">IFSC Code</label>
+                                    <input type="text" id="bank_ifsc" name="bank_ifsc" maxlength="15" placeholder="e.g. SBIN0001234" style="text-transform:uppercase" value="<?= h($student['bank_ifsc'] ?? '') ?>">
+                                </div>
+                                <div class="form-group">
+                                    <label for="bank_name">Bank Name</label>
+                                    <input type="text" id="bank_name" name="bank_name" maxlength="120" placeholder="e.g. State Bank of India" value="<?= h($student['bank_name'] ?? '') ?>">
+                                </div>
+                                <div class="form-group">
+                                    <label for="bank_branch">Branch</label>
+                                    <input type="text" id="bank_branch" name="bank_branch" maxlength="120" placeholder="Branch name" value="<?= h($student['bank_branch'] ?? '') ?>">
                                 </div>
                             </div>
 
@@ -830,8 +886,21 @@ if (!$is_new && $student) {
                                     <?php endif; ?>
                                 </div>
                                 <div class="form-group">
-                                    <label for="program">Program / Branch</label>
-                                    <input type="text" id="program" name="program" placeholder="e.g. B.E. Computer Engg." value="<?= h($student['program'] ?? '') ?>">
+                                    <label for="program">Faculty / Course</label>
+                                    <input type="text" id="program" name="program" placeholder="e.g. B.Tech, M.Tech, B.Arch, MBA" value="<?= h($student['program'] ?? '') ?>">
+                                </div>
+                                <div class="form-group">
+                                    <label for="department_name">Department / Branch</label>
+                                    <input type="text" id="department_name" name="department_name" placeholder="e.g. Computer Engineering" value="<?= h($student['department_name'] ?? '') ?>">
+                                </div>
+                                <div class="form-group" id="courseDurationField">
+                                    <label for="course_duration_years">Duration of Course</label>
+                                    <select id="course_duration_years" name="course_duration_years">
+                                        <option value="">— Select —</option>
+                                        <?php foreach (['2 Year', '3 Year', '4 Year', '5 Year', '6 Year'] as $dur): ?>
+                                            <option value="<?= h($dur) ?>" <?= is_selected($dur, $student['course_duration_years'] ?? '') ?>><?= h($dur) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
                                 </div>
                                 <div class="form-group">
                                     <label for="academic_year">Academic Year *</label>
@@ -851,6 +920,50 @@ if (!$is_new && $student) {
                                             <option value="<?= h($y) ?>" data-study-year="<?= h(strtolower($y)) ?>" <?= is_selected($y, $student['study_year'] ?? '') ?>><?= h($y) ?> Year</option>
                                         <?php endforeach; ?>
                                     </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="ssc_passing_year">SSC Passing Year</label>
+                                    <input type="text" id="ssc_passing_year" name="ssc_passing_year" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" placeholder="e.g. 2018" value="<?= h((string)($student['ssc_passing_year'] ?? '')) ?>">
+                                </div>
+                                <div class="form-group">
+                                    <label for="hsc_passing_year">HSC Passing Year</label>
+                                    <input type="text" id="hsc_passing_year" name="hsc_passing_year" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" placeholder="e.g. 2020" value="<?= h((string)($student['hsc_passing_year'] ?? '')) ?>">
+                                </div>
+                                <div class="form-group">
+                                    <label for="diploma_passing_year">Diploma Passing Year</label>
+                                    <input type="text" id="diploma_passing_year" name="diploma_passing_year" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" placeholder="e.g. 2022" value="<?= h((string)($student['diploma_passing_year'] ?? '')) ?>">
+                                </div>
+                                <div class="form-group">
+                                    <label for="first_admission_university_year">First Admission — University/College</label>
+                                    <input type="text" id="first_admission_university_year" name="first_admission_university_year" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" placeholder="e.g. 2023" value="<?= h((string)($student['first_admission_university_year'] ?? '')) ?>">
+                                </div>
+                                <div class="form-group">
+                                    <label for="first_admission_course_year">First Admission — Present Course</label>
+                                    <input type="text" id="first_admission_course_year" name="first_admission_course_year" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" placeholder="e.g. 2023" value="<?= h((string)($student['first_admission_course_year'] ?? '')) ?>">
+                                </div>
+                                <div class="form-group">
+                                    <label for="first_admission_class_year">First Admission — Present Class</label>
+                                    <input type="text" id="first_admission_class_year" name="first_admission_class_year" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" placeholder="e.g. 2025" value="<?= h((string)($student['first_admission_class_year'] ?? '')) ?>">
+                                </div>
+                                <div class="form-group" style="grid-column:1/-1">
+                                    <label>Gap / Year Drop?</label>
+                                    <?php $gapChoiceFac = ($student['has_gap_year'] ?? null); $gapChoiceFac = ($gapChoiceFac === 0 || $gapChoiceFac === 1) ? (int)$gapChoiceFac : null; ?>
+                                    <div class="yesno-group" role="radiogroup" aria-label="Gap / Year Drop?" id="gapYearGroupFac">
+                                        <label class="yesno-opt <?= $gapChoiceFac === 1 ? 'selected' : '' ?>" data-val="1">
+                                            <input type="radio" name="has_gap_year" value="1" <?= $gapChoiceFac === 1 ? 'checked' : '' ?>>
+                                            <span class="yesno-circle"></span>
+                                            <span class="yesno-text">Yes</span>
+                                        </label>
+                                        <label class="yesno-opt <?= $gapChoiceFac === 0 ? 'selected' : '' ?>" data-val="0">
+                                            <input type="radio" name="has_gap_year" value="0" <?= $gapChoiceFac === 0 ? 'checked' : '' ?>>
+                                            <span class="yesno-circle"></span>
+                                            <span class="yesno-text">No</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="form-group" id="gapYearDetailFieldFac" style="<?= $gapChoiceFac === 1 ? '' : 'display:none' ?>">
+                                    <label for="gap_year_detail">Please Mention Year</label>
+                                    <input type="text" id="gap_year_detail" name="gap_year_detail" maxlength="100" placeholder="e.g. 2022" value="<?= h((string)($student['gap_year_detail'] ?? '')) ?>">
                                 </div>
                             </div>
 
@@ -933,6 +1046,41 @@ if (!$is_new && $student) {
                                     </div>
                                 </div>
                             <?php endif; ?>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="jersey_size">Jersey Size</label>
+                                    <select id="jersey_size" name="jersey_size">
+                                        <option value="">— Select —</option>
+                                        <?php foreach (jersey_size_options() as $code => $label): ?>
+                                            <option value="<?= h($code) ?>" <?= is_selected($code, $student['jersey_size'] ?? '') ?>><?= h($label) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="jersey_number">Jersey Number</label>
+                                    <input type="text" id="jersey_number" name="jersey_number" maxlength="10"
+                                           placeholder="e.g. 7" value="<?= h((string)($student['jersey_number'] ?? '')) ?>">
+                                    <div class="hint"><strong>Note: final number is subject to change as per match requirement.</strong></div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="shorts_size">Shorts Size</label>
+                                    <select id="shorts_size" name="shorts_size">
+                                        <option value="">— Select —</option>
+                                        <?php foreach (shorts_size_options() as $code => $label): ?>
+                                            <option value="<?= h($code) ?>" <?= is_selected($code, $student['shorts_size'] ?? '') ?>><?= h($label) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="track_size">Track Pant Size</label>
+                                    <select id="track_size" name="track_size">
+                                        <option value="">— Select —</option>
+                                        <?php foreach (shorts_size_options() as $code => $label): ?>
+                                            <option value="<?= h($code) ?>" <?= is_selected($code, $student['track_size'] ?? '') ?>><?= h($label) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                            </div>
                             <div class="form-grid">
                                 <div class="form-group" style="grid-column:1/-1">
                                     <label for="achievements">Achievements / Notes</label>
@@ -1063,6 +1211,8 @@ if (!$is_new && $student) {
             var rollField = document.getElementById('rollNumberField');
             var rollInput = document.getElementById('roll_no');
             var studyYearSelect = document.getElementById('study_year');
+            var courseDurationField = document.getElementById('courseDurationField');
+            var courseDurationSelect = document.getElementById('course_duration_years');
 
             function updateDepartmentFields() {
                 if (!deptSelect) return;
@@ -1087,6 +1237,13 @@ if (!$is_new && $student) {
                     rollField.style.display = showRollNumber ? '' : 'none';
                     rollInput.required = false;
                     if (!showRollNumber) rollInput.value = '';
+                }
+                if (courseDurationField && courseDurationSelect) {
+                    // Matches student-dashboard.php's $needs_course_duration — every
+                    // department except polytechnic (dpharm still collects it).
+                    var needsCourseDuration = !isDiploma;
+                    courseDurationField.style.display = needsCourseDuration ? '' : 'none';
+                    if (!needsCourseDuration) courseDurationSelect.value = '';
                 }
                 if (studyYearSelect) {
                     Array.from(studyYearSelect.options).forEach(function(yearOption) {
@@ -1127,7 +1284,8 @@ if (!$is_new && $student) {
                             var accept = isPhoto ? 'image/jpeg,.jpg,.jpeg' : 'application/pdf,.pdf';
                             html += '<div class=\"form-group\">' +
                                     '<label for=\"doc_' + req.id + '\">' + req.document_name + '</label>' +
-                                    '<input type=\"file\" id=\"doc_' + req.id + '\" name=\"doc_' + req.id + '\" ' + requiredAttr + ' accept=\"' + accept + '\">' +
+                                    '<input type=\"file\" id=\"doc_' + req.id + '\" name=\"doc_' + req.id + '\" ' + requiredAttr + ' accept=\"' + accept + '\" aria-describedby=\"doc_err_' + req.id + '\">' +
+                                    '<div class=\"doc-field-error\" id=\"doc_err_' + req.id + '\" role=\"alert\" aria-live=\"polite\"></div>' +
                                     '</div>';
                         });
                         docsGrid.innerHTML = html;
@@ -1144,13 +1302,20 @@ if (!$is_new && $student) {
             (function () {
                 var MAX_BYTES = 1024 * 1024; // 1 MB
                 function reject(input, msg) {
-                    alert(msg);
+                    var errEl = document.getElementById('doc_err_' + String(input.id || '').replace(/^doc_/, ''));
+                    if (errEl) {
+                        errEl.textContent = msg;
+                    } else {
+                        alert(msg);
+                    }
                     input.value = '';
                 }
                 function attach(input) {
                     input.addEventListener('change', function (e) {
                         var f = e.target.files && e.target.files[0];
                         if (!f) return;
+                        var errEl = document.getElementById('doc_err_' + String(input.id || '').replace(/^doc_/, ''));
+                        if (errEl) errEl.textContent = '';
                         var accept = (input.getAttribute('accept') || '').toLowerCase();
                         var isPhoto = accept.indexOf('image/jpeg') !== -1;
                         if (isPhoto) {
@@ -1219,6 +1384,21 @@ if (!$is_new && $student) {
                 });
             });
         });
+
+        // Gap Year — show/hide the "Please Mention Year" field with the answer.
+        (function () {
+            var gapGroup  = document.getElementById('gapYearGroupFac');
+            var gapDetail = document.getElementById('gapYearDetailFieldFac');
+            if (!gapGroup || !gapDetail) return;
+            gapGroup.addEventListener('click', function () {
+                var checked = gapGroup.querySelector('input[name="has_gap_year"]:checked');
+                gapDetail.style.display = (checked && checked.value === '1') ? '' : 'none';
+                if (!checked || checked.value !== '1') {
+                    var detailInput = document.getElementById('gap_year_detail');
+                    if (detailInput) detailInput.value = '';
+                }
+            });
+        })();
 
         // Game-picker (faculty edit) — no cap, at least 1 required.
         (function () {

@@ -47,6 +47,10 @@ $achievements = db_select(
       ORDER BY a.event_date DESC LIMIT 8"
 );
 
+$committee = db_select(
+    "SELECT * FROM committee_members WHERE is_published = 1 ORDER BY display_order ASC, id ASC"
+);
+
 // News ticker = latest 5 published notices, with fallback welcome item
 $ticker = db_select(
     "SELECT title, category FROM notices
@@ -79,29 +83,6 @@ function notice_badge_class(?string $cat): string
     return 'badge-general';
 }
 
-// "Posted 2 days ago" style relative time.
-function time_ago(?string $date): string
-{
-    if (!$date)
-        return '';
-    $ts = strtotime($date);
-    if (!$ts)
-        return '';
-    $diff = time() - $ts;
-    if ($diff < 0)
-        return date('M d, Y', $ts);
-    if ($diff < 60)
-        return 'just now';
-    if ($diff < 3600)
-        return floor($diff / 60) . ' minutes ago';
-    if ($diff < 86400)
-        return floor($diff / 3600) . ' hours ago';
-    if ($diff < 86400 * 7)
-        return floor($diff / 86400) . ' days ago';
-    if ($diff < 86400 * 30)
-        return floor($diff / (86400 * 7)) . ' weeks ago';
-    return date('M d, Y', $ts);
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -177,7 +158,7 @@ function time_ago(?string $date): string
             <div class="container">
                 <a class="navbar-brand" href="index.php">
                     <img src="<?= h(url($college['logo_path'])) ?>" alt="<?= h($college['name']) ?>"
-                        class="college-logo">
+                        class="college-logo" width="70" height="70">
                     <div class="brand-text">
                         <span class="trust-name"><?= h($college['trust_name']) ?></span>
                         <span class="autonomous-status">An Autonomous Institute</span>
@@ -274,65 +255,65 @@ function time_ago(?string $date): string
                     <div class="affiliation-track" id="affiliationTrack">
                         <div class="affiliation-item">
                             <div class="aff-logo-wrap"><img src="<?= h(url('images/shivaji-university-logo.png')) ?>"
-                                    alt="Shivaji University Logo"></div>
+                                    alt="Shivaji University Logo" width="75" height="75"></div>
                             <div class="aff-text"><span class="aff-name">Approved By Shivaji<br>University,
                                     Kolhapur</span></div>
                         </div>
                         <div class="affiliation-item">
                             <div class="aff-logo-wrap"><img src="<?= h(url('images/dbatu-logo.png')) ?>"
-                                    alt="DBATU Logo"></div>
+                                    alt="DBATU Logo" width="75" height="75"></div>
                             <div class="aff-text"><span class="aff-name">Approved By DBATU,<br>Lonere</span></div>
                         </div>
                         <div class="affiliation-item">
                             <div class="aff-logo-wrap"><img src="<?= h(url('images/msbte-logo.png')) ?>"
-                                    alt="MSBTE Logo"></div>
+                                    alt="MSBTE Logo" width="75" height="75"></div>
                             <div class="aff-text"><span class="aff-name">Approved By MSBTE,<br>Mumbai</span></div>
                         </div>
                         <div class="affiliation-item">
                             <div class="aff-logo-wrap"><img src="<?= h(url('images/naac.png')) ?>"
-                                    alt="NAAC Logo"></div>
+                                    alt="NAAC Logo" width="75" height="75"></div>
                             <div class="aff-text"><span class="aff-name">Accredited By<br>NAAC</span></div>
                         </div>
                         <div class="affiliation-item">
                             <div class="aff-logo-wrap"><img src="<?= h(url('images/nba.png')) ?>"
-                                    alt="NBA Logo"></div>
+                                    alt="NBA Logo" width="75" height="75"></div>
                             <div class="aff-text"><span class="aff-name">Accredited By<br>NBA</span></div>
                         </div>
                         <div class="affiliation-item">
                             <div class="aff-logo-wrap"><img src="<?= h(url('images/aicte.png')) ?>"
-                                    alt="AICTE Logo"></div>
+                                    alt="AICTE Logo" width="75" height="75"></div>
                             <div class="aff-text"><span class="aff-name">Approved By AICTE,<br>New Delhi</span></div>
                         </div>
                         <!-- Duplicated for seamless loop -->
                         <div class="affiliation-item">
                             <div class="aff-logo-wrap"><img src="<?= h(url('images/shivaji-university-logo.png')) ?>"
-                                    alt="Shivaji University Logo"></div>
+                                    alt="Shivaji University Logo" width="75" height="75"></div>
                             <div class="aff-text"><span class="aff-name">Approved By Shivaji<br>University,
                                     Kolhapur</span></div>
                         </div>
                         <div class="affiliation-item">
                             <div class="aff-logo-wrap"><img src="<?= h(url('images/dbatu-logo.png')) ?>"
-                                    alt="DBATU Logo"></div>
+                                    alt="DBATU Logo" width="75" height="75"></div>
                             <div class="aff-text"><span class="aff-name">Approved By DBATU,<br>Lonere</span></div>
                         </div>
                         <div class="affiliation-item">
                             <div class="aff-logo-wrap"><img src="<?= h(url('images/msbte-logo.png')) ?>"
-                                    alt="MSBTE Logo"></div>
+                                    alt="MSBTE Logo" width="75" height="75"></div>
                             <div class="aff-text"><span class="aff-name">Approved By MSBTE,<br>Mumbai</span></div>
                         </div>
                         <div class="affiliation-item">
                             <div class="aff-logo-wrap"><img src="<?= h(url('images/naac.png')) ?>"
-                                    alt="NAAC Logo"></div>
+                                    alt="NAAC Logo" width="75" height="75"></div>
                             <div class="aff-text"><span class="aff-name">Accredited By<br>NAAC</span></div>
                         </div>
                         <div class="affiliation-item">
                             <div class="aff-logo-wrap"><img src="<?= h(url('images/nba.png')) ?>"
-                                    alt="NBA Logo"></div>
+                                    alt="NBA Logo" width="75" height="75"></div>
                             <div class="aff-text"><span class="aff-name">Accredited By<br>NBA</span></div>
                         </div>
                         <div class="affiliation-item">
                             <div class="aff-logo-wrap"><img src="<?= h(url('images/aicte.png')) ?>"
-                                    alt="AICTE Logo"></div>
+                                    alt="AICTE Logo" width="75" height="75"></div>
                             <div class="aff-text"><span class="aff-name">Approved By AICTE,<br>New Delhi</span></div>
                         </div>
                     </div>
@@ -383,21 +364,21 @@ function time_ago(?string $date): string
                                             </div>
                                             <div class="notice-actions">
                                                 <?php if (!empty($n['attachment'])): ?>
-                                                    <a href="#" class="btn btn-view btn-notice"
+                                                    <button type="button" class="btn btn-view btn-notice"
                                                         data-pdf="<?= h(url('uploads/notices/' . $n['attachment'])) ?>"
                                                         data-title="<?= h($n['title']) ?>"
-                                                        onclick="openPdfViewer(this); return false;">
+                                                        onclick="openPdfViewer(this)">
                                                         <i class="bi bi-eye"></i> View
-                                                    </a>
+                                                    </button>
                                                     <a href="<?= h(url('uploads/notices/' . $n['attachment'])) ?>"
                                                         class="btn btn-download btn-notice" download>
                                                         <i class="bi bi-file-earmark-pdf"></i> PDF
                                                     </a>
                                                 <?php else: ?>
-                                                    <a href="#" class="btn btn-view btn-notice" disabled
+                                                    <span class="btn btn-view btn-notice" aria-disabled="true"
                                                         style="opacity:0.5;pointer-events:none">
                                                         <i class="bi bi-eye"></i> View
-                                                    </a>
+                                                    </span>
                                                 <?php endif; ?>
                                             </div>
                                         </article>
@@ -501,42 +482,54 @@ function time_ago(?string $date): string
         <section class="committee-section" id="committee-section" aria-labelledby="committee-heading">
             <div class="container">
                 <h2 id="committee-heading" class="section-title">Sports Committee</h2>
+                <?php if (!$committee): ?>
+                    <p style="text-align:center;color:var(--medium-gray)">No committee members published yet.</p>
+                <?php else: ?>
                 <div class="row g-4">
                     <?php
-                    // The HTML demo has 3 hard-coded committee cards (Director /
-                    // Head Coach / Coordinator) as the canonical reference.
-                    // The faculty table in the DB holds user/role accounts, not
-                    // committee members, so we render the HTML demo by default
-                    // to keep the page visually identical to index.html.
-                    $demo_committee = [
-                        ['name' => 'Dr. Rajesh Kumar', 'badge' => 'Director', 'desig' => 'Director of Sports', 'dept' => 'Department of Physical Education', 'email' => 'director.sports@xyz.edu', 'phone' => '+911234567890', 'photo' => 'https://placehold.co/400x500/1a365d/ffffff?text=Director'],
-                        ['name' => 'Prof. Sarah Johnson', 'badge' => 'Head Coach', 'desig' => 'Head Coach - Team Sports', 'dept' => 'Basketball, Volleyball, Football', 'email' => 'sarah.johnson@xyz.edu', 'phone' => '+911234567891', 'photo' => 'https://placehold.co/400x500/722f37/ffffff?text=Coach'],
-                        ['name' => 'Mr. Arun Nair', 'badge' => 'Coordinator', 'desig' => 'Sports Coordinator', 'dept' => 'Athletics & Indoor Games', 'email' => 'arun.nair@xyz.edu', 'phone' => '+911234567892', 'photo' => 'https://placehold.co/400x500/2c5282/ffffff?text=Coordinator'],
-                    ];
-                    foreach ($demo_committee as $idx => $m):
-                        $col_class = $idx === 2 ? 'col-md-6 col-lg-4 mx-auto' : 'col-md-6 col-lg-4';
+                    // Admin-editable via admin/committee_manage.php (see committee_members
+                    // table, migration v55). Falls back to a placehold.co avatar, cycling
+                    // through the original demo's 3 colors, when no photo is uploaded.
+                    $committee_colors = ['1a365d', '722f37', '2c5282'];
+                    $committee_count  = count($committee);
+                    foreach ($committee as $idx => $m):
+                        $is_last_orphan = $idx === $committee_count - 1 && $committee_count % 3 === 1;
+                        $col_class = $is_last_orphan ? 'col-md-6 col-lg-4 mx-auto' : 'col-md-6 col-lg-4';
+                        if (!empty($m['photo_path']) && is_file(__DIR__ . '/' . $m['photo_path'])) {
+                            $photo_url = url($m['photo_path']);
+                        } else {
+                            $color = $committee_colors[$idx % count($committee_colors)];
+                            $photo_url = 'https://placehold.co/400x500/' . $color . '/ffffff?text=' . urlencode($m['badge']);
+                        }
                         ?>
                         <div class="<?= h($col_class) ?>">
                             <article class="faculty-card">
                                 <div class="faculty-image-wrapper">
-                                    <img src="<?= h($m['photo']) ?>" alt="<?= h($m['name']) ?>" class="faculty-image">
+                                    <img src="<?= h($photo_url) ?>" alt="<?= h($m['full_name']) ?>" class="faculty-image" width="140" height="140">
                                 </div>
                                 <div class="faculty-info">
                                     <span class="faculty-badge"><?= h($m['badge']) ?></span>
-                                    <h3 class="faculty-name"><?= h($m['name']) ?></h3>
-                                    <p class="faculty-designation"><?= h($m['desig']) ?></p>
-                                    <p class="faculty-department"><?= h($m['dept']) ?></p>
+                                    <h3 class="faculty-name"><?= h($m['full_name']) ?></h3>
+                                    <p class="faculty-designation"><?= h($m['designation']) ?></p>
+                                    <?php if (!empty($m['department_line'])): ?>
+                                        <p class="faculty-department"><?= h($m['department_line']) ?></p>
+                                    <?php endif; ?>
                                     <div class="faculty-contact">
-                                        <a href="mailto:<?= h($m['email']) ?>" aria-label="Email <?= h($m['name']) ?>"><i
-                                                class="bi bi-envelope-fill"></i></a>
-                                        <a href="tel:<?= h($m['phone']) ?>" aria-label="Call <?= h($m['name']) ?>"><i
-                                                class="bi bi-telephone-fill"></i></a>
+                                        <?php if (!empty($m['email'])): ?>
+                                            <a href="mailto:<?= h($m['email']) ?>" aria-label="Email <?= h($m['full_name']) ?>"><i
+                                                    class="bi bi-envelope-fill"></i></a>
+                                        <?php endif; ?>
+                                        <?php if (!empty($m['phone'])): ?>
+                                            <a href="tel:<?= h($m['phone']) ?>" aria-label="Call <?= h($m['full_name']) ?>"><i
+                                                    class="bi bi-telephone-fill"></i></a>
+                                        <?php endif; ?>
                                     </div>
                                 </div>
                             </article>
                         </div>
                     <?php endforeach; ?>
                 </div>
+                <?php endif; ?>
             </div>
         </section>
 
@@ -713,9 +706,14 @@ function time_ago(?string $date): string
             // ---- Achievements carousel (touch swipe) ----
             const achievementsCarousel = document.getElementById('achievementsCarousel');
             if (achievementsCarousel && typeof bootstrap !== 'undefined') {
+                const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
                 const carousel = new bootstrap.Carousel(achievementsCarousel, {
-                    interval: 5000, wrap: true, keyboard: true, pause: 'hover', touch: true
+                    interval: prefersReducedMotion ? false : 5000, wrap: true, keyboard: true, pause: 'hover', touch: true
                 });
+                // Bootstrap's built-in pause:'hover' only binds mouseenter/mouseleave —
+                // keyboard-focused users get no way to stop the autoplay otherwise.
+                achievementsCarousel.addEventListener('focusin', () => carousel.pause());
+                achievementsCarousel.addEventListener('focusout', () => { if (!prefersReducedMotion) carousel.cycle(); });
                 let touchStartX = 0, touchEndX = 0;
                 achievementsCarousel.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; }, { passive: true });
                 achievementsCarousel.addEventListener('touchend', e => {
@@ -783,13 +781,6 @@ function time_ago(?string $date): string
                 apply(false);
             })();
         });
-
-        // ---- Contact form demo handler ----
-        function handleContactSubmit(e) {
-            e.preventDefault();
-            alert('Thank you for your message! We will get back to you soon.\n\n(Note: This is a demo. Backend integration required to send emails.)');
-            e.target.reset();
-        }
 
         // ---- PDF viewer modal ----
         function openPdfViewer(btn) {

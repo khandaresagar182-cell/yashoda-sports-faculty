@@ -45,7 +45,7 @@ function url(string $path): string
         // For uploaded files, route through serve_file.php for reliable
         // access on LiteSpeed / Namecheap shared hosting (avoids 403).
         $clean = ltrim($path, '/');
-        if (preg_match('#^uploads/(documents|students|achievements|notices)/.+#', $clean)) {
+        if (preg_match('#^uploads/(documents|students|achievements|notices|external)/.+#', $clean)) {
             // serve_file.php expects f=documents/xxx.pdf (without "uploads/" prefix)
             $file_param = substr($clean, strlen('uploads/'));
             $cached[$path] = $prefix . '/serve_file.php?f=' . rawurlencode($file_param);
@@ -111,12 +111,6 @@ function flash_get(string $key): ?array
     unset($_SESSION['_flash'][$key]);
     return $f;
 }
-function flash_pull(string $key): string
-{
-    $f = flash_get($key);
-    return $f ? $f['msg'] : '';
-}
-
 /* ---------------- formatters ---------------- */
 
 function format_date($d, string $fmt = 'd M Y'): string
@@ -176,6 +170,60 @@ function sport_options(): array
 function gender_options(): array  { return ['Male','Female','Other']; }
 function blood_options(): array  { return ['A+','A-','B+','B-','O+','O-','AB+','AB-']; }
 function year_options(): array   { return ['First','Second','Third','Final']; }
+
+/**
+ * Email domains accepted for student self-registration. Kept to a small
+ * whitelist of major public providers so students can't sign up with
+ * throwaway / typo'd domains that bounce the verification email.
+ */
+function allowed_student_email_domains(): array
+{
+    return ['gmail.com', 'yahoo.com', 'outlook.com', 'icloud.com', 'rediff.com'];
+}
+
+/** True if $email's domain is on the student-registration whitelist. */
+function is_allowed_student_email(string $email): bool
+{
+    $at = strrpos($email, '@');
+    if ($at === false) return false;
+    $domain = strtolower(substr($email, $at + 1));
+    return in_array($domain, allowed_student_email_domains(), true);
+}
+
+/**
+ * Jersey size codes => "letter (chest inches)" display label, standard
+ * Indian sports-kit sizing. Stored on students.jersey_size as the bare
+ * code (e.g. 'M'); the label is only for display.
+ */
+function jersey_size_options(): array
+{
+    return [
+        'XS'  => 'XS (34)',
+        'S'   => 'S (36)',
+        'M'   => 'M (38)',
+        'L'   => 'L (40)',
+        'XL'  => 'XL (42)',
+        'XXL' => 'XXL (44)',
+    ];
+}
+
+/**
+ * Shorts / track-pant size codes => "letter (waist inches)" display
+ * label. Both are bottoms sized by waist, not chest, so they share this
+ * scale — a separate one from jersey_size_options(). Stored on
+ * students.shorts_size / track_size as the bare code.
+ */
+function shorts_size_options(): array
+{
+    return [
+        'XS'  => 'XS (26)',
+        'S'   => 'S (28)',
+        'M'   => 'M (30)',
+        'L'   => 'L (32)',
+        'XL'  => 'XL (34)',
+        'XXL' => 'XXL (36)',
+    ];
+}
 
 /**
  * The five tournament-level participation questions asked in Step 4
@@ -239,30 +287,6 @@ function initials(string $name): string
         return mb_substr($out, 0, 2) ?: '?';
     }
     return substr($out, 0, 2) ?: '?';
-}
-
-/**
- * Split a stored "full_name" into [first, middle, surname].
- * If the name has only one part, surname = the whole name.
- * If two parts, [first, '', surname].
- * If three or more, the LAST is surname and the first is first_name;
- * everything in between is joined as middle_name.
- */
-function split_full_name(?string $full): array
-{
-    $full = trim((string)$full);
-    if ($full === '') return ['first_name' => '', 'middle_name' => '', 'surname' => ''];
-    $parts = preg_split('/\s+/', $full);
-    if (count($parts) === 1) {
-        return ['first_name' => '', 'middle_name' => '', 'surname' => $parts[0]];
-    }
-    if (count($parts) === 2) {
-        return ['first_name' => $parts[0], 'middle_name' => '', 'surname' => $parts[1]];
-    }
-    $surname  = array_pop($parts);
-    $first    = array_shift($parts);
-    $middle   = implode(' ', $parts);
-    return ['first_name' => $first, 'middle_name' => $middle, 'surname' => $surname];
 }
 
 /**

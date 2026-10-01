@@ -116,7 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $valid_user_id) {
             </div>
             <div class="login-card-body">
                 <?php if ($err): ?>
-                    <div class="alert-banner error"><i class="bi bi-exclamation-circle"></i> <?= h($err) ?></div>
+                    <div class="alert-banner error" role="alert"><i class="bi bi-exclamation-circle"></i> <?= h($err) ?></div>
                 <?php endif; ?>
                 <?php if ($valid_user_id): ?>
                     <form method="post">

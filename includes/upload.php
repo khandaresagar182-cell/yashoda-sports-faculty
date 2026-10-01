@@ -10,7 +10,7 @@ const UPLOAD_BASE = __DIR__ . '/../uploads';
 
 // Whitelist of allowed upload buckets. Anything outside this list is rejected
 // to prevent path traversal (e.g., $bucket = 'students/../../etc').
-const UPLOAD_BUCKETS = ['students', 'notices', 'achievements', 'documents'];
+const UPLOAD_BUCKETS = ['students', 'notices', 'achievements', 'documents', 'external', 'committee'];
 
 function upload_dir(string $bucket): string
 {

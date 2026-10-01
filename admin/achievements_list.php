@@ -43,24 +43,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $ok  = flash_get('ach_saved');
 $err = flash_get('ach_error');
 
+$q    = trim((string)($_GET['q'] ?? ''));
+$page = max(1, (int)($_GET['page'] ?? 1));
+$per  = 50;
+
+$where  = '(s.form_submitted_at IS NOT NULL OR s.id IS NULL)';
+$params = [];
+$types  = '';
+if ($q !== '') {
+    $where   .= ' AND (a.title LIKE ? OR s.full_name LIKE ? OR a.event_name LIKE ? OR a.description LIKE ?)';
+    $params[] = '%' . $q . '%';
+    $params[] = '%' . $q . '%';
+    $params[] = '%' . $q . '%';
+    $params[] = '%' . $q . '%';
+    $types   .= 'ssss';
+}
+
+$total = (int)(db_one(
+    "SELECT COUNT(*) AS n
+       FROM achievements a
+       LEFT JOIN students  s ON s.id = a.student_id
+       LEFT JOIN departments d ON d.id = s.department_id
+      WHERE $where",
+    $params, $types
+)['n'] ?? 0);
+$pages = max(1, (int)ceil($total / $per));
+if ($page > $pages) $page = $pages;
+$offset = ($page - 1) * $per;
+
 $achievements = db_select(
     "SELECT a.*, s.full_name AS student_name, s.enrollment_no, d.name AS dept_name
        FROM achievements a
        LEFT JOIN students  s ON s.id = a.student_id
        LEFT JOIN departments d ON d.id = s.department_id
-      WHERE s.form_submitted_at IS NOT NULL OR s.id IS NULL
-      ORDER BY a.event_date DESC, a.id DESC"
+      WHERE $where
+      ORDER BY a.event_date DESC, a.id DESC
+      LIMIT $per OFFSET $offset",
+    $params, $types
 );
-
-$q = trim((string)($_GET['q'] ?? ''));
-if ($q !== '') {
-    $achievements = array_values(array_filter($achievements, function ($a) use ($q) {
-        return stripos($a['title'], $q) !== false
-            || stripos((string)$a['student_name'], $q) !== false
-            || stripos((string)$a['event_name'], $q) !== false
-            || stripos((string)$a['description'], $q) !== false;
-    }));
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -118,6 +138,13 @@ if ($q !== '') {
         .data-table td{padding:.75rem 1rem;font-size:.88rem;border-bottom:1px solid var(--light-gray);color:var(--text-dark);vertical-align:middle}
         .data-table tr:last-child td{border-bottom:none}
         .data-table tr:hover{background:var(--off-white)}
+        .pagination{padding:1rem 1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;border-top:1px solid var(--light-gray)}
+        .pagination .info{font-size:.85rem;color:var(--medium-gray)}
+        .pagination .pages{display:flex;gap:.25rem}
+        .pagination .pages a{padding:.35rem .65rem;border:1px solid var(--light-gray);border-radius:4px;font-size:.85rem;color:var(--primary-navy);text-decoration:none;background:var(--white)}
+        .pagination .pages a:hover{background:var(--off-white)}
+        .pagination .pages a.active{background:var(--primary-navy);color:var(--white);border-color:var(--primary-navy)}
+        .pagination .pages a.disabled{opacity:.4;pointer-events:none}
         .badge{display:inline-block;padding:.2rem .6rem;border-radius:4px;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px}
         .badge-published{background:rgba(25,135,84,.12);color:#0a3622}
         .badge-draft{background:rgba(108,117,125,.15);color:#495057}
@@ -157,7 +184,7 @@ if ($q !== '') {
 
         <aside class="sidebar">
             <div class="sidebar-brand">
-                <img src="<?= h(url('images/ytc-logo.png')) ?>" alt="YTC Logo">
+                <img src="<?= h(url('images/ytc-logo.png')) ?>" alt="YTC Logo" width="42" height="42">
                 <div class="sidebar-brand-text">
                     <h2>Sports Database</h2>
                     <span>Yashoda Technical Campus</span>
@@ -179,10 +206,12 @@ if ($q !== '') {
                 <div class="sidebar-nav-label">Site Content</div>
                 <a href="notices_list.php"><i class="bi bi-megaphone"></i> <span>Notices</span></a>
                 <a href="achievements_list.php" class="active"><i class="bi bi-trophy"></i> <span>Achievements</span></a>
+                <a href="committee_manage.php"><i class="bi bi-people-fill"></i> <span>Committee</span></a>
                 <?php if ($me['role'] === 'SUPER_ADMIN'): ?>
                     <div class="sidebar-nav-label">Admin</div>
                     <a href="faculty_manage.php"><i class="bi bi-people-fill"></i> <span>Faculty Management</span></a>
                     <a href="document_requirements.php"><i class="bi bi-file-earmark-ruled"></i> <span>Document Requirements</span></a>
+                    <a href="sports_assign.php"><i class="bi bi-trophy-fill"></i> <span>Sports Assignment</span></a>
                 <?php endif; ?>
                 <div class="sidebar-nav-label">Site</div>
                 <a href="../index.php"><i class="bi bi-globe"></i> <span>View Website</span></a>
@@ -194,7 +223,7 @@ if ($q !== '') {
                         <h4><?= h($me['full_name']) ?></h4>
                         <span><?= h($me['department_name'] ?? $me['role']) ?></span>
                     </div>
-                    <a href="logout.php?_csrf=<?= h(csrf_token()) ?>" class="btn-logout" title="Logout"><i class="bi bi-box-arrow-right"></i></a>
+                    <a href="logout.php?_csrf=<?= h(csrf_token()) ?>" class="btn-logout" title="Logout" aria-label="Logout"><i class="bi bi-box-arrow-right"></i></a>
                 </div>
             </div>
         </aside>
@@ -205,8 +234,8 @@ if ($q !== '') {
             </header>
 
             <div class="content-body">
-                <?php if ($ok):  ?><div class="alert-banner success"><i class="bi bi-check-circle"></i> <?= h($ok['msg']) ?></div><?php endif; ?>
-                <?php if ($err): ?><div class="alert-banner error"><i class="bi bi-exclamation-circle"></i> <?= h($err['msg']) ?></div><?php endif; ?>
+                <?php if ($ok):  ?><div class="alert-banner success" role="alert"><i class="bi bi-check-circle"></i> <?= h($ok['msg']) ?></div><?php endif; ?>
+                <?php if ($err): ?><div class="alert-banner error" role="alert"><i class="bi bi-exclamation-circle"></i> <?= h($err['msg']) ?></div><?php endif; ?>
 
                 <div class="page-header">
                     <div>
@@ -218,10 +247,10 @@ if ($q !== '') {
 
                 <div class="data-card">
                     <div class="data-card-header">
-                        <h2><i class="bi bi-trophy"></i> All Achievements (<?= count($achievements) ?>)</h2>
+                        <h2><i class="bi bi-trophy"></i> All Achievements (<?= $total ?>)</h2>
                         <form method="get" class="search-form" action="achievements_list.php">
                             <input type="text" name="q" value="<?= h($q) ?>" placeholder="Search title, student, event…">
-                            <button type="submit" class="btn btn-secondary" style="padding:.5rem .75rem"><i class="bi bi-search"></i></button>
+                            <button type="submit" class="btn btn-secondary" style="padding:.5rem .75rem" aria-label="Search"><i class="bi bi-search"></i></button>
                         </form>
                     </div>
 
@@ -255,7 +284,7 @@ if ($q !== '') {
                                 <tr>
                                     <td>
                                         <?php if ($has_image): ?>
-                                            <img class="thumb" src="<?= h(url($a['image_path'])) ?>" alt="">
+                                            <img class="thumb" src="<?= h(url($a['image_path'])) ?>" alt="" width="54" height="40">
                                         <?php else: ?>
                                             <div class="thumb-fallback"><i class="bi bi-trophy"></i></div>
                                         <?php endif; ?>
@@ -301,7 +330,7 @@ if ($q !== '') {
                                                 <?= csrf_field() ?>
                                                 <input type="hidden" name="do" value="delete">
                                                 <input type="hidden" name="id" value="<?= (int)$a['id'] ?>">
-                                                <button class="btn btn-danger" style="padding:.3rem .6rem;font-size:.78rem"><i class="bi bi-trash"></i></button>
+                                                <button class="btn btn-danger" style="padding:.3rem .6rem;font-size:.78rem" aria-label="Delete achievement — <?= h($a['title']) ?>"><i class="bi bi-trash"></i></button>
                                             </form>
                                         </div>
                                     </td>
@@ -309,6 +338,21 @@ if ($q !== '') {
                             <?php endforeach; ?>
                             </tbody>
                         </table>
+                        <div class="pagination">
+                            <div class="info">Page <?= $page ?> of <?= $pages ?> · <?= $total ?> total</div>
+                            <div class="pages">
+                                <?php
+                                $base_q = http_build_query(array_filter(['q' => $q]));
+                                $prev = max(1, $page - 1);
+                                $next = min($pages, $page + 1);
+                                ?>
+                                <a class="<?= $page <= 1 ? 'disabled' : '' ?>" aria-label="Previous page" href="?<?= h($base_q . '&page=' . $prev) ?>"><i class="bi bi-chevron-left"></i></a>
+                                <?php for ($i = 1; $i <= $pages; $i++): ?>
+                                    <a class="<?= $i === $page ? 'active' : '' ?>" href="?<?= h($base_q . '&page=' . $i) ?>"><?= $i ?></a>
+                                <?php endfor; ?>
+                                <a class="<?= $page >= $pages ? 'disabled' : '' ?>" aria-label="Next page" href="?<?= h($base_q . '&page=' . $next) ?>"><i class="bi bi-chevron-right"></i></a>
+                            </div>
+                        </div>
                     <?php endif; ?>
                 </div>
             </div>

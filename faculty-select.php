@@ -140,6 +140,8 @@ if ($f['role'] === 'FACULTY' && count($departments) === 1) {
         .sidebar-nav a.active { color: var(--white); background: rgba(201,162,39,0.12); border-left-color: var(--accent-gold); }
         .sidebar-nav a.active i { color: var(--accent-gold); }
         .sidebar-nav a i { font-size: 1.15rem; width: 22px; text-align: center; flex-shrink: 0; }
+        .sidebar-nav button.disabled-link { display: flex; align-items: center; gap: 0.75rem; padding: 0.7rem 1.5rem; width: 100%; text-align: left; background: none; border: none; border-left: 3px solid transparent; color: rgba(255,255,255,0.3); font-size: 0.88rem; font-weight: 500; font-family: inherit; cursor: not-allowed; }
+        .sidebar-nav button.disabled-link i { font-size: 1.15rem; width: 22px; text-align: center; flex-shrink: 0; }
         .sidebar-nav a .nav-badge { margin-left: auto; background: var(--accent-gold); color: var(--primary-navy-dark); font-size: 0.65rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 10px; }
         .sidebar-footer { padding: 1rem 1.25rem; border-top: 1px solid rgba(255,255,255,0.08); }
         .sidebar-user { display: flex; align-items: center; gap: 0.75rem; }
@@ -247,18 +249,18 @@ if ($f['role'] === 'FACULTY' && count($departments) === 1) {
                 <a href="#" class="active">
                     <i class="bi bi-building"></i> <span>Select Faculty</span>
                 </a>
-                <a href="#" onclick="alert('Pick a faculty first.'); return false;">
+                <button type="button" class="disabled-link" disabled title="Pick a faculty first">
                     <i class="bi bi-speedometer2"></i> <span>Dashboard</span>
-                </a>
-                <a href="#" onclick="alert('Pick a faculty first.'); return false;">
+                </button>
+                <button type="button" class="disabled-link" disabled title="Pick a faculty first">
                     <i class="bi bi-search"></i> <span>Search Students</span>
-                </a>
-                <a href="#" onclick="alert('Pick a faculty first.'); return false;">
+                </button>
+                <button type="button" class="disabled-link" disabled title="Pick a faculty first">
                     <i class="bi bi-clipboard-check"></i> <span>Provisional Players</span>
-                </a>
-                <a href="#" onclick="alert('Pick a faculty first.'); return false;">
+                </button>
+                <button type="button" class="disabled-link" disabled title="Pick a faculty first">
                     <i class="bi bi-check-all"></i> <span>Final Teams</span>
-                </a>
+                </button>
                 <div class="sidebar-nav-label">Settings</div>
                 <a href="index.php">
                     <i class="bi bi-globe"></i> <span>View Website</span>
@@ -271,7 +273,7 @@ if ($f['role'] === 'FACULTY' && count($departments) === 1) {
                         <h4><?= h($f['full_name']) ?></h4>
                         <span><?= h($f['role']) ?></span>
                     </div>
-                    <a href="admin/logout.php?_csrf=<?= h(csrf_token()) ?>" class="btn-logout" title="Logout">
+                    <a href="admin/logout.php?_csrf=<?= h(csrf_token()) ?>" class="btn-logout" title="Logout" aria-label="Logout">
                         <i class="bi bi-box-arrow-right"></i>
                     </a>
                 </div>
@@ -306,7 +308,7 @@ if ($f['role'] === 'FACULTY' && count($departments) === 1) {
                 </div>
 
                 <?php if ($flash): ?>
-                    <div class="alert-banner <?= h($flash['level']) ?>">
+                    <div class="alert-banner <?= h($flash['level']) ?>" role="alert">
                         <i class="bi bi-exclamation-circle"></i> <?= h($flash['msg']) ?>
                     </div>
                 <?php endif; ?>

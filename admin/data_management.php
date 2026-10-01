@@ -241,6 +241,9 @@ $flash = flash_get('data_management_info');
                     <a href="achievements_list.php">
                         <i class="bi bi-trophy"></i> <span>Achievements</span>
                     </a>
+                    <a href="committee_manage.php">
+                        <i class="bi bi-people-fill"></i> <span>Committee</span>
+                    </a>
                 <?php endif; ?>
                 <?php if ($me['role'] === 'SUPER_ADMIN'): ?>
                     <div class="sidebar-nav-label">Admin</div>
@@ -249,6 +252,9 @@ $flash = flash_get('data_management_info');
                     </a>
                     <a href="document_requirements.php">
                         <i class="bi bi-file-earmark-ruled"></i> <span>Document Requirements</span>
+                    </a>
+                    <a href="sports_assign.php">
+                        <i class="bi bi-trophy-fill"></i> <span>Sports Assignment</span>
                     </a>
                 <?php endif; ?>
                 <div class="sidebar-nav-label">Site</div>
@@ -289,7 +295,7 @@ $flash = flash_get('data_management_info');
                 </div>
 
                 <?php if ($flash): ?>
-                    <div class="alert-banner <?= h($flash['level']) ?>">
+                    <div class="alert-banner <?= h($flash['level']) ?>" role="alert">
                         <i class="bi bi-info-circle"></i> <?= h($flash['msg']) ?>
                     </div>
                 <?php endif; ?>
@@ -304,8 +310,9 @@ $flash = flash_get('data_management_info');
                                 <h3>Reset student data &mdash; <?= h($purgeScopeLabel) ?></h3>
                                 <p>
                                     Permanently deletes every student profile and everything students filled in:
-                                    uploaded documents &amp; photos, selected games, and provisional / final team entries.
-                                    <span class="keep">Eligibility archive files are kept.</span>
+                                    uploaded documents &amp; photos, selected games, provisional / final team entries,
+                                    and external entries (submissions, their files and any unverified sign-ups).
+                                    <span class="keep">Eligibility archive files and entry links are kept.</span>
                                     <span class="warn">This cannot be undone.</span>
                                 </p>
                             </div>
@@ -414,7 +421,7 @@ $flash = flash_get('data_management_info');
                         </div>
                         <div class="dm-modal-body">
                             <p>
-                                This permanently deletes <strong>all student records for <?= h($purgeScopeLabel) ?></strong>.
+                                This permanently deletes <strong>all student records and external entries for <?= h($purgeScopeLabel) ?></strong>.
                                 Eligibility archive files are kept. <strong>This cannot be undone.</strong>
                             </p>
                             <form method="post" action="student_data_purge.php" id="dmForm">

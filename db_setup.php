@@ -45,6 +45,22 @@ if (!$expected) {
     echo "Set it under Settings -> Environment Variables, redeploy, then retry.\n";
     exit;
 }
+// Refuse a weak or template-default token. The old template value
+// ("pick-a-long-random-string-…") was published in the build script and the
+// example config, so treating it as a valid secret would make this script's
+// only gate guessable. Fail closed with the same 503 as "not set".
+$tokenPlaceholders = ['pick-a-long-random', 'your_db_setup_token', 'replace_with', 'paste_your', 'change_me', 'changeme'];
+$tokenLooksWeak = strlen($expected) < 24;
+foreach ($tokenPlaceholders as $frag) {
+    if (stripos($expected, $frag) !== false) { $tokenLooksWeak = true; break; }
+}
+if ($tokenLooksWeak) {
+    http_response_code(503);
+    header('Content-Type: text/plain; charset=utf-8');
+    echo "db_setup: DB_SETUP_TOKEN is too short (<24 chars) or still a template placeholder.\n";
+    echo "Set a long random value in config.local.php (e.g. bin2hex(random_bytes(24))), then retry.\n";
+    exit;
+}
 $given = (string)($_GET['t'] ?? '');
 if (!hash_equals($expected, $given)) {
     http_response_code(403);
@@ -140,6 +156,15 @@ if (!empty($check)) {
         echo "Otherwise, delete db_setup.php from the repo and redeploy.\n";
         exit;
     }
+    // ?reset=1 DROPs every table. The setup token is the only other gate, and
+    // it travels in URLs (access logs, browser history), so a reset is only
+    // ever allowed on a local/dev install — never on a production host.
+    if (APP_ENV !== 'local') {
+        http_response_code(403);
+        echo "db_setup: ?reset=1 is disabled unless APP_ENV=local (current: " . APP_ENV . ").\n";
+        echo "Restore a backup or fix the schema with a targeted migration instead.\n";
+        exit;
+    }
     echo "==> ?reset=1 passed — dropping all tables and re-running from scratch\n";
     $conn2 = db();
     // Disable FK checks for the wipe. SHOW TABLES returns rows in arbitrary
@@ -216,7 +241,15 @@ $files  = [
     'migration-v45-eligibility-archive.sql',
     'migration-v46-heal-document-requirements.sql',
     'migration-v47-email-verification.sql',
+    'migration-v48-provisional-added-by-nullable.sql',
+    'migration-v49-simple-jersey-details.sql',
+    'migration-v50-shorts-track-size.sql',
     'migration_student_auth.sql',
+    'migration-v51-external-entries.sql',
+    'migration-v52-external-academic-fields.sql',
+    'migration-v53-heal-volleyball-catalog.sql',
+    'migration-v54-student-password-resets.sql',
+    'migration-v55-committee-members.sql',
 ];
 
 $conn = db(); // fresh handle, charset already set in db()

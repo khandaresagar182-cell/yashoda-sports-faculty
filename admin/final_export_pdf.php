@@ -2,8 +2,8 @@
 /**
  * Export the final-team eligibility form in the college's physical format.
  *
- * Final-roster students are printed into the physical form. Unused participant
- * rows remain blank so more names can still be entered by hand.
+ * Every final-roster student is printed into the physical form. Larger teams
+ * continue onto additional pages in the same downloaded eligibility file.
  *
  * Every department except Polytechnic uses the Shivaji University
  * "Eligibility Proforma for Zonal/Inter-Zonal Tournaments" (exact table
@@ -52,7 +52,7 @@ $rows = db_select(
             s.study_year, s.program,
             s.course_duration_years, s.admission_year, s.academic_year,
             s.first_admission_university_year, s.first_admission_course_year, s.first_admission_class_year,
-            s.hsc_passing_year, s.has_gap_year, s.gap_year_detail,
+            s.hsc_passing_year, s.diploma_passing_year, s.has_gap_year, s.gap_year_detail,
             s.mobile, s.bank_account_number, s.bank_ifsc, s.photo_path,
             d.code AS dept_code, d.name AS dept_name
        FROM final_teams ft
@@ -98,7 +98,7 @@ if (!$isPolytechnic && $rows) {
     unset($r);
 }
 
-$playersPerPage = $isPolytechnic ? 16 : 7;
+$playersPerPage = $isPolytechnic ? 16 : SHIVAJI_ELIGIBILITY_ROWS_PER_PAGE;
 $pages = array_chunk($rows, $playersPerPage);
 if ($pages === []) {
     $pages = [[]];
@@ -125,6 +125,8 @@ foreach ($pages as $pageIndex => $pageRows) {
             'logo_path'     => __DIR__ . '/../images/ytc-logo.png',
             'participants'  => $pageRows,
             'row_count'     => count($pageRows),
+            'starting_number' => ($pageIndex * $playersPerPage) + 1,
+            'include_certification' => $pageIndex === count($pages) - 1,
         ]);
     } else {
         // "Section" on the Shivaji proforma is the gender section
@@ -138,6 +140,7 @@ foreach ($pages as $pageIndex => $pageRows) {
             'department_name' => $deptName,
             'participants'    => $pageRows,
             'starting_number' => ($pageIndex * $playersPerPage) + 1,
+            'include_certification' => $pageIndex === count($pages) - 1,
         ]);
     }
 }

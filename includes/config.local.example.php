@@ -27,10 +27,12 @@ return [
     'DB_USER' => 'YOUR_DB_USER',   // e.g. <cpaneluser>_csfuser
     'DB_PASS' => 'YOUR_PASSWORD_HERE',
 
-    // Token required by db_setup.php to run the schema migrations.
-    // Pick any long random string. Pass it as ?t=TOKEN on the URL.
-    // After setup succeeds, delete db_setup.php from the server.
-    'DB_SETUP_TOKEN' => 'pick-a-long-random-string',
+    // Token required by db_setup.php to run the schema migrations. Must be at
+    // least 24 characters and NOT this placeholder — db_setup.php refuses both.
+    // Generate one:  php -r "echo bin2hex(random_bytes(24));"
+    // Pass it as ?t=TOKEN on the URL. db_setup.php is not shipped in the
+    // production zip by default; after setup succeeds, delete it from the server.
+    'DB_SETUP_TOKEN' => 'REPLACE_WITH_48_RANDOM_HEX_CHARS',
 
     // Outbound email (includes/mailer.php) — sends a new student their
     // username + password after registration / faculty-created accounts.

@@ -266,6 +266,27 @@ CREATE TABLE `password_resets` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ---------------------------------------------------------------------
+-- 10. student_password_resets  (student forgot-password tokens —
+--     mirrors password_resets, keyed to students instead of faculty;
+--     added in migration-v54)
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS `student_password_resets`;
+CREATE TABLE `student_password_resets` (
+    `id`         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `student_id` INT UNSIGNED NOT NULL,
+    `token_hash` VARCHAR(255) NOT NULL,
+    `expires_at` TIMESTAMP    NOT NULL,
+    `used_at`    TIMESTAMP    NULL,
+    `ip`         VARBINARY(16) NULL,
+    `created_at` TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_student_reset_student` (`student_id`),
+    KEY `idx_student_reset_token` (`token_hash`),
+    CONSTRAINT `fk_student_reset_student` FOREIGN KEY (`student_id`)
+        REFERENCES `students`(`id`) ON UPDATE CASCADE ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------
 -- 11. dept_game_catalog — per-dept list of games offered for the
 --     student-wizard Step 3 checkbox picker. Seeded for polytechnic
 --     and dpharm in migration-v22-game-catalog.sql.
@@ -515,6 +536,35 @@ INSERT IGNORE INTO `dept_game_catalog`
     (`department_id`, `game_code`,      `display_name`,   `max_picks`, `display_order`)
 SELECT d.id, 'badminton',     'Badminton',            4, 16
   FROM `departments` d WHERE d.code IN ('management', 'architecture');
+
+-- ---------------------------------------------------------------------
+-- 14. committee_members — admin-editable Sports Committee cards shown
+--     on the public homepage (index.php). Seeded with the same 3 members
+--     the old hard-coded demo used, so a fresh install still shows a
+--     populated section by default.
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS `committee_members`;
+CREATE TABLE `committee_members` (
+    `id`              INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `full_name`       VARCHAR(150) NOT NULL,
+    `badge`           VARCHAR(60)  NOT NULL,
+    `designation`     VARCHAR(150) NOT NULL,
+    `department_line` VARCHAR(200) NULL,
+    `email`           VARCHAR(150) NULL,
+    `phone`           VARCHAR(30)  NULL,
+    `photo_path`      VARCHAR(255) NULL,
+    `display_order`   INT UNSIGNED NOT NULL DEFAULT 0,
+    `is_published`    TINYINT(1)   NOT NULL DEFAULT 1,
+    `created_at`      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_committee_published` (`is_published`,`display_order`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO `committee_members` (`full_name`, `badge`, `designation`, `department_line`, `email`, `phone`, `display_order`) VALUES
+    ('Dr. Rajesh Kumar', 'Director', 'Director of Sports', 'Department of Physical Education', 'director.sports@xyz.edu', '+911234567890', 1),
+    ('Prof. Sarah Johnson', 'Head Coach', 'Head Coach - Team Sports', 'Basketball, Volleyball, Football', 'sarah.johnson@xyz.edu', '+911234567891', 2),
+    ('Mr. Arun Nair', 'Coordinator', 'Sports Coordinator', 'Athletics & Indoor Games', 'arun.nair@xyz.edu', '+911234567892', 3);
 
 -- =====================================================================
 --  END OF SCHEMA

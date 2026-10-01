@@ -1,14 +1,18 @@
 <?php
 /**
  * Student forgot-password handler.
- * Looks up the student by email, resets password_hash back to bcrypt(DOB in
- * DDMMYYYY), and shows the credentials on the forgot-password page itself
- * (via a one-shot flash payload).
  *
- * Privacy note: we deliberately do NOT leak whether the email exists;
- * the UI always says "if we found your account, your password has been reset".
- * To keep the demo straightforward, the UI is also a single page — if the
- * email doesn't exist, we just show a generic error.
+ * Mirrors the faculty flow (forgot_process.php / reset_password.php):
+ * looks up the student by email, and — without revealing whether the
+ * account exists — emails a time-limited reset link
+ * (student_reset_password.php?token=...) instead of resetting the
+ * password immediately. Nothing about the account changes until the
+ * student actually clicks that link and chooses a new password.
+ *
+ * Previously this reset the password straight back to the student's DOB
+ * from just an email address, with no proof of inbox access — anyone who
+ * knew or guessed a student's DOB could take over their account. The
+ * token-based link closes that gap.
  */
 
 declare(strict_types=1);
@@ -34,38 +38,42 @@ if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     redirect('student-forgot-password.php');
 }
 
+$generic = 'If an account exists for that email, a password reset link has been sent. Check your inbox.';
+
 $student = db_one(
-    'SELECT id, email, full_name, dob, password_hash, is_active
-       FROM students
-      WHERE email = ?',
+    'SELECT id, email, full_name, is_active FROM students WHERE email = ?',
     [$email], 's'
 );
 
-if (!$student || empty($student['dob']) || empty($student['password_hash']) || !$student['is_active']) {
+if (!$student || !$student['is_active']) {
+    // Don't reveal whether the account exists.
     record_login_attempt($email, false);
-    flash_set('student_forgot_error',
-        'No active account was found with that email. Please register first or check the address.', 'error');
+    flash_set('student_forgot_ok', $generic, 'info');
     redirect('student-forgot-password.php');
 }
 
-$plaintext = dob_to_password($student['dob']);
-if (!$plaintext) {
-    record_login_attempt($email, false);
-    flash_set('student_forgot_error', 'Your account is missing a date of birth. Please contact the Faculty of Sports.', 'error');
-    redirect('student-forgot-password.php');
-}
-
-$new_hash = password_hash($plaintext, PASSWORD_BCRYPT);
-// Resetting to the DOB-derived password puts the account back on the
-// DOB-password scheme, so student_dashboard_process.php should resume
-// syncing the password whenever DOB is edited on Step 1.
-db_execute('UPDATE students SET password_hash = ?, password_set_by_user = 0 WHERE id = ?', [$new_hash, (int)$student['id']], 'si');
 record_login_attempt($email, true);
 
-$_SESSION['_student_reset_show'] = [
-    'email'    => $student['email'],
-    'password' => $plaintext,
-];
-$_SESSION['_student_reset_done'] = true;   // banner for the login page
+$token      = bin2hex(random_bytes(32));
+$token_hash = hash('sha256', $token);
+$expires    = date('Y-m-d H:i:s', time() + 1800); // 30 min, same window as the faculty flow
 
+$ip_bytes = @inet_pton(client_ip()) ?: null;
+$ip_param = $ip_bytes ?? "\x00\x00\x00\x00";
+
+db_insert(
+    'INSERT INTO student_password_resets (student_id, token_hash, expires_at, ip) VALUES (?,?,?,?)',
+    [(int)$student['id'], $token_hash, $expires, $ip_param],
+    'issb'
+);
+
+$reset_url = rtrim(SITE_URL, '/') . '/student_reset_password.php?token=' . $token;
+$emailed   = send_student_password_reset_email($student['email'], $student['full_name'], $reset_url);
+
+flash_set('student_forgot_ok', $generic, 'info', [
+    // Local/dev only — mirrors forgot_process.php's dev_link fallback so
+    // the flow is testable without a working SMTP config.
+    'dev_link' => (APP_ENV === 'local') ? $reset_url : null,
+    'emailed'  => $emailed,
+]);
 redirect('student-forgot-password.php');

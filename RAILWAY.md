@@ -1,3 +1,6 @@
+> **Historical — Railway is no longer a deployment target.** Production is Namecheap cPanel (see the README's *Deployment* section).
+> `scripts/init_database.php` referenced below no longer exists, and the seeded default logins here must be changed on any real deployment.
+
 # Railway Deployment
 
 The portal runs as one PHP/Apache service with one Railway MySQL service.

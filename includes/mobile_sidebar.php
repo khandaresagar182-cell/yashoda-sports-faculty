@@ -2,9 +2,9 @@
 /**
  * Mobile sidebar auto-injector.
  *
- * 10 admin pages (faculty_manage, notices_list, notice_edit, achievements_list,
+ * Several admin pages (faculty_manage, notices_list, notice_edit, achievements_list,
  * achievement_edit, provisional_list, final_list, jersey_dashboard,
- * jersey_manage, student_list) render the standard `.sidebar` markup and
+ * student_list, ...) render the standard `.sidebar` markup and
  * ship mobile CSS that hides it off-screen at <= 992px — but they do NOT
  * ship a toggle button, an overlay, or the JS handler. On a phone that
  * sidebar is permanently unreachable, so users can't tap "Dashboard",

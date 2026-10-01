@@ -106,6 +106,10 @@ $flash_kind = $flash['level'] ?? 'error';
             100% { transform: translate(-3%, -3%) rotate(2deg); }
         }
 
+        @media (prefers-reduced-motion: reduce) {
+            .login-page::before { animation: none; }
+        }
+
         .login-card {
             position: relative; z-index: 1;
             width: 100%; max-width: 360px;
@@ -350,7 +354,7 @@ $flash_kind = $flash['level'] ?? 'error';
 
             <div class="login-card-header">
                 <div class="login-icon">
-                    <img src="images/ytc-logo.png" alt="YTC Logo" style="width: 100%; height: 100%; object-fit: contain;">
+                    <img src="images/ytc-logo.png" alt="YTC Logo" width="48" height="48" style="width: 100%; height: 100%; object-fit: contain;">
                 </div>
                 <h1>Faculty Login</h1>
                 <p>Faculty of Sports - Secure Portal</p>
@@ -358,12 +362,12 @@ $flash_kind = $flash['level'] ?? 'error';
 
             <div class="login-card-body">
 
-                <div class="login-alert alert-danger" id="loginAlert" style="<?= $flash_msg ? 'display:flex' : 'display:none' ?>">
+                <div class="login-alert alert-danger" id="loginAlert" role="alert" style="<?= $flash_msg ? 'display:flex' : 'display:none' ?>">
                     <i class="bi bi-exclamation-circle"></i>
                     <span id="alertMessage"><?= h($flash_msg ?: '') ?></span>
                 </div>
 
-                <form id="loginForm" action="admin/login_process.php" method="POST" novalidate>
+                <form id="loginForm" action="admin/login_process.php" method="POST">
                     <?= csrf_field() ?>
 
                     <div class="form-group">

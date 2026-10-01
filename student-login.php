@@ -47,8 +47,10 @@ if ($just_registered !== null) unset($_SESSION['_student_just_registered']);
     <style>
         body { background: var(--primary-navy-dark); display:flex; flex-direction:column; min-height:100vh; }
         .login-page { flex:1; display:flex; align-items:center; justify-content:center; padding:2rem 1rem; position:relative; overflow:hidden; }
+        .login-bg-image { position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; opacity:.25; z-index:0; }
         .login-page::before { content:''; position:absolute; inset:-50%; background: radial-gradient(circle at 20% 50%, rgba(201,162,39,.08) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(114,47,55,.06) 0%, transparent 50%); animation: bgShift 15s ease-in-out infinite alternate; }
         @keyframes bgShift { 0% { transform: translate(0,0) rotate(0deg); } 100% { transform: translate(-3%,-3%) rotate(2deg); } }
+        @media (prefers-reduced-motion: reduce) { .login-page::before { animation: none; } }
         .login-card { position:relative; z-index:1; width:100%; max-width:380px; background:#fff; border-radius:14px; box-shadow:0 12px 40px rgba(0,0,0,.25), 0 4px 12px rgba(0,0,0,.15); overflow:hidden; animation: cardEntry .6s ease-out; }
         @keyframes cardEntry { from { opacity:0; transform: translateY(30px) scale(.97); } to { opacity:1; transform: translateY(0) scale(1); } }
         .login-card-header { background: linear-gradient(135deg, var(--primary-navy), var(--primary-navy-dark)); padding:1.25rem 1.5rem 1.1rem; text-align:center; position:relative; }
@@ -108,6 +110,7 @@ if ($just_registered !== null) unset($_SESSION['_student_just_registered']);
 </head>
 <body>
     <main class="login-page">
+        <img src="images/bg2.jpg" alt="" class="login-bg-image">
         <div class="login-card">
             <div class="login-card-header">
                 <div class="login-icon">
@@ -119,20 +122,20 @@ if ($just_registered !== null) unset($_SESSION['_student_just_registered']);
 
             <div class="login-card-body">
                 <?php if ($flash_msg): ?>
-                    <div class="login-alert alert-danger">
+                    <div class="login-alert alert-danger" role="alert">
                         <i class="bi bi-exclamation-circle"></i>
                         <span><?= h($flash_msg) ?></span>
                     </div>
                 <?php endif; ?>
 
                 <?php if ($reset_info): ?>
-                    <div class="login-alert alert-info">
+                    <div class="login-alert alert-info" role="alert">
                         <i class="bi bi-key"></i>
                         <span>Your password has been reset to your date of birth (DDMMYYYY). Please sign in.</span>
                     </div>
                 <?php endif; ?>
 
-                <form id="loginForm" action="student_login_process.php" method="POST" novalidate>
+                <form id="loginForm" action="student_login_process.php" method="POST">
                     <?= csrf_field() ?>
 
                     <div class="form-group">

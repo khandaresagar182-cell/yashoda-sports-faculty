@@ -35,7 +35,7 @@ $rows = db_select(
             s.study_year, s.program, s.course_duration_years,
             s.admission_year, s.academic_year,
             s.first_admission_university_year, s.first_admission_course_year, s.first_admission_class_year,
-            s.hsc_passing_year, s.has_gap_year, s.gap_year_detail,
+            s.hsc_passing_year, s.diploma_passing_year, s.has_gap_year, s.gap_year_detail,
             s.mobile, s.bank_account_number, s.bank_ifsc, s.photo_path,
             d.code AS dept_code, d.name AS dept_name
        FROM final_teams ft

@@ -177,11 +177,13 @@ $rows = db_select(
                     <div class="sidebar-nav-label">Site Content</div>
                     <a href="notices_list.php"><i class="bi bi-megaphone"></i> <span>Notices</span></a>
                     <a href="achievements_list.php"><i class="bi bi-trophy"></i> <span>Achievements</span></a>
+                    <a href="committee_manage.php"><i class="bi bi-people-fill"></i> <span>Committee</span></a>
                 <?php endif; ?>
                 <?php if ($me['role'] === 'SUPER_ADMIN'): ?>
                     <div class="sidebar-nav-label">Admin</div>
                     <a href="faculty_manage.php"><i class="bi bi-people-fill"></i> <span>Faculty Management</span></a>
                     <a href="document_requirements.php"><i class="bi bi-file-earmark-ruled"></i> <span>Document Requirements</span></a>
+                    <a href="sports_assign.php"><i class="bi bi-trophy-fill"></i> <span>Sports Assignment</span></a>
                 <?php endif; ?>
                 <div class="sidebar-nav-label">Site</div>
                 <a href="../index.php"><i class="bi bi-globe"></i> <span>View Website</span></a>
@@ -193,7 +195,7 @@ $rows = db_select(
                         <h4><?= h($me['full_name']) ?></h4>
                         <span><?= h($me['department_name'] ?? $me['role']) ?></span>
                     </div>
-                    <a href="logout.php?_csrf=<?= h(csrf_token()) ?>" class="btn-logout" title="Logout"><i class="bi bi-box-arrow-right"></i></a>
+                    <a href="logout.php?_csrf=<?= h(csrf_token()) ?>" class="btn-logout" title="Logout" aria-label="Logout"><i class="bi bi-box-arrow-right"></i></a>
                 </div>
             </div>
         </aside>
@@ -215,9 +217,9 @@ $rows = db_select(
                 $ok_flash  = flash_get('student_saved');
                 $err_flash = flash_get('student_error');
                 if ($ok_flash): ?>
-                    <div class="alert-banner success"><i class="bi bi-check-circle"></i> <?= h($ok_flash['msg']) ?></div>
+                    <div class="alert-banner success" role="alert"><i class="bi bi-check-circle"></i> <?= h($ok_flash['msg']) ?></div>
                 <?php endif; if ($err_flash): ?>
-                    <div class="alert-banner error"><i class="bi bi-exclamation-circle"></i> <?= h($err_flash['msg']) ?></div>
+                    <div class="alert-banner error" role="alert"><i class="bi bi-exclamation-circle"></i> <?= h($err_flash['msg']) ?></div>
                 <?php endif; ?>
 
                 <form method="get" action="student_list.php" class="search-form">
@@ -315,11 +317,11 @@ $rows = db_select(
                                 $prev = max(1, $page - 1);
                                 $next = min($pages, $page + 1);
                                 ?>
-                                <a class="<?= $page <= 1 ? 'disabled' : '' ?>" href="?<?= h($base_q.'&page='.$prev) ?>"><i class="bi bi-chevron-left"></i></a>
+                                <a class="<?= $page <= 1 ? 'disabled' : '' ?>" aria-label="Previous page" href="?<?= h($base_q.'&page='.$prev) ?>"><i class="bi bi-chevron-left"></i></a>
                                 <?php for ($i = 1; $i <= $pages; $i++): ?>
                                     <a class="<?= $i === $page ? 'active' : '' ?>" href="?<?= h($base_q.'&page='.$i) ?>"><?= $i ?></a>
                                 <?php endfor; ?>
-                                <a class="<?= $page >= $pages ? 'disabled' : '' ?>" href="?<?= h($base_q.'&page='.$next) ?>"><i class="bi bi-chevron-right"></i></a>
+                                <a class="<?= $page >= $pages ? 'disabled' : '' ?>" aria-label="Next page" href="?<?= h($base_q.'&page='.$next) ?>"><i class="bi bi-chevron-right"></i></a>
                             </div>
                         </div>
                     <?php endif; ?>

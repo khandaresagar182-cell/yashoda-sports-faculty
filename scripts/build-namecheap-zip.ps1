@@ -8,6 +8,17 @@
 # Usage (MUST run with PowerShell 7 / pwsh — Windows PowerShell 5.1 writes
 # backslash separators into the zip, which break extraction on Linux cPanel):
 #   pwsh -ExecutionPolicy Bypass -File scripts/build-namecheap-zip.ps1
+#
+# One-off setup scripts (db_setup.php + db_migrate_vNN.php) are NOT shipped by
+# default: db_setup.php's ?reset=1 drops every table, and a script the operator
+# is told to "delete after use" is silently re-created by every later upload.
+# Add -IncludeSetup only for a deploy that actually needs to run them, then
+# delete them from the server straight afterwards:
+#   pwsh -ExecutionPolicy Bypass -File scripts/build-namecheap-zip.ps1 -IncludeSetup
+
+param(
+    [switch]$IncludeSetup
+)
 
 $ErrorActionPreference = 'Stop'
 
@@ -46,6 +57,7 @@ robocopy $projectRoot $stagingDir /E /XD `
     "_quarantine" `
     "backups" `
     "docs" `
+    "scripts" `
     | Out-Null
 
 Write-Host "    Done." -ForegroundColor Green
@@ -60,9 +72,15 @@ Write-Host "`n=== Step 2: Cleaning unwanted files ===" -ForegroundColor Cyan
 $dumpFile = Join-Path $stagingDir 'csf_portal_dump.sql'
 if (Test-Path $dumpFile) { Remove-Item $dumpFile -Force; Write-Host "    Removed csf_portal_dump.sql" }
 
-# 2b. One-off debug scripts — only db_setup.php ships (token-gated, deleted
-# after first run). The rest were quarantined out of the repo in the cleanup pass.
-$keepDbScripts = @('db_setup.php')
+# 2b. One-off setup / migration scripts. By default NONE ship (see the header:
+# db_setup.php can wipe the database and "delete after use" is undone by every
+# re-upload). -IncludeSetup ships the token-gated, self-deleting set for a
+# deploy that has to run them.
+$keepDbScripts = @()
+if ($IncludeSetup) {
+    $keepDbScripts = @('db_setup.php', 'db_migrate_v47.php', 'db_migrate_v48.php', 'db_migrate_v49.php', 'db_migrate_v50.php', 'db_migrate_v51.php', 'db_migrate_v52.php', 'db_migrate_v53.php', 'db_migrate_v54.php', 'db_migrate_v55.php')
+    Write-Host "    -IncludeSetup: shipping db_setup.php + db_migrate_v47..v55.php (delete them from the server after use)" -ForegroundColor Yellow
+}
 Get-ChildItem -Path $stagingDir -Filter 'db_*.php' -File | Where-Object {
     $_.Name -notin $keepDbScripts
 } | ForEach-Object {
@@ -74,8 +92,9 @@ Get-ChildItem -Path $stagingDir -Filter 'db_*.php' -File | Where-Object {
 Get-ChildItem -Path $stagingDir -Recurse -Include '.DS_Store','Thumbs.db','*.bak','*.swp','*.tmp','*.log','*.cache' -File `
     | Remove-Item -Force -ErrorAction SilentlyContinue
 
-# 2d. Dev config files that shouldn't ship
-@('.gitignore', 'DEPLOY.md', 'RAILWAY.md', 'INSTALL.md') | ForEach-Object {
+# 2d. Dev config files that shouldn't ship. README.md documents the seeded
+# logins and deployment layout; the .htaccess also denies *.md as a backstop.
+@('.gitignore', 'DEPLOY.md', 'RAILWAY.md', 'INSTALL.md', 'README.md') | ForEach-Object {
     $f = Join-Path $stagingDir $_
     if (Test-Path $f) { Remove-Item $f -Force; Write-Host "    Removed dev file: $_" }
 }
@@ -94,7 +113,7 @@ Write-Host "    Done." -ForegroundColor Green
 
 Write-Host "`n=== Step 3: Creating upload/session directories ===" -ForegroundColor Cyan
 
-foreach ($sub in @('students','achievements','notices','documents')) {
+foreach ($sub in @('students','achievements','notices','documents','external','committee')) {
     $path = Join-Path $stagingDir "uploads\$sub"
     if (-not (Test-Path $path)) {
         New-Item -ItemType Directory -Path $path | Out-Null
@@ -283,6 +302,16 @@ max_execution_time = 120
 Set-Content -Path (Join-Path $cpanelDir 'user.ini') -Value $userIniTpl -Encoding UTF8
 
 # --- config.local.php template ---
+# A fresh random setup token per build, so the template never carries a
+# guessable default. Only relevant for a build made with -IncludeSetup.
+$setupTokenBytes = New-Object byte[] 24
+$setupTokenGenerator = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+try {
+    $setupTokenGenerator.GetBytes($setupTokenBytes)
+} finally {
+    $setupTokenGenerator.Dispose()
+}
+$setupToken = -join ($setupTokenBytes | ForEach-Object { $_.ToString('x2') })
 $cfgTpl = @"
 <?php
 /**
@@ -302,9 +331,11 @@ $cfgTpl = @"
  *   DB_NAME = 'yashlnhl_csfportal'
  *   DB_USER = 'yashlnhl_csfuser'
  *
- * DB_SETUP_TOKEN is any long random string. You need it once to run:
+ * DB_SETUP_TOKEN is a random value generated for this build. It is only used
+ * by db_setup.php / db_migrate_vNN.php, which are shipped ONLY when the zip was
+ * built with -IncludeSetup. If you run one:
  *   https://yashodasportsfaculty.me/db_setup.php?t=YOUR_TOKEN
- * Then DELETE db_setup.php from the server.
+ * then DELETE it from the server straight afterwards.
  */
 
 return [
@@ -324,8 +355,8 @@ return [
     // --- App environment ---
     'APP_ENV' => 'production',
 
-    // --- One-time DB setup token ---
-    'DB_SETUP_TOKEN' => 'pick-a-long-random-string-here-1234567890',
+    // --- One-time DB setup token (random per build; see note above) ---
+    'DB_SETUP_TOKEN' => '$setupToken',
 ];
 "@
 Set-Content -Path (Join-Path $cpanelDir 'config.local.php') -Value $cfgTpl -Encoding UTF8
@@ -405,8 +436,8 @@ $readme = @'
        - IMPORTANT: Add the user TO the database with ALL PRIVILEGES)
   3. Open "config.local.php" from THIS folder in a text editor.
   4. Fill in DB_NAME, DB_USER, DB_PASS with the real values.
-  5. Set DB_SETUP_TOKEN to any long random string (you'll need it
-     once to run the database setup).
+  5. DB_SETUP_TOKEN is pre-filled with a random value for this build.
+     It only matters if you built with -IncludeSetup (Step 5).
   6. Upload the file to:
        public_html/includes/config.local.php
   7. Set file permissions to 600 (most secure) or 644.
@@ -414,18 +445,30 @@ $readme = @'
   The root .htaccess already blocks direct web access to this file.
 
 ----------------------------------------------------------------
- Step 5 — Run the one-time database setup
+ Step 5 — One-time database setup / migrations (ONLY if needed)
 ----------------------------------------------------------------
 
-  In your browser, open:
+  db_setup.php and db_migrate_vNN.php are NOT in the zip by default.
+  Skip this step on a normal code-only deploy.
+
+  If this deploy needs them (fresh database, or an unapplied
+  migration), rebuild with:
+
+    pwsh -ExecutionPolicy Bypass -File scripts/build-namecheap-zip.ps1 -IncludeSetup
+
+  then open, in your browser:
 
     https://yashodasportsfaculty.me/db_setup.php?t=YOUR_DB_SETUP_TOKEN
 
   You should see green "OK" lines for schema.sql, seed.ready.sql,
   and every migration-v*.sql, ending with "db_setup: done."
 
-  Then DELETE db_setup.php from the server (File Manager -> right-
-  click -> Delete). It is a one-time script.
+  Then DELETE db_setup.php and every db_migrate_v*.php from the
+  server (File Manager -> right-click -> Delete). They are one-time
+  scripts; a leftover db_setup.php is a database-wipe risk.
+
+  db_setup.php's ?reset=1 (drop everything) only works when
+  APP_ENV=local, so it cannot be used on this production host.
 
 ----------------------------------------------------------------
  Step 6 — Smoke test (check these 5 URLs in order)
@@ -437,7 +480,8 @@ $readme = @'
   2. https://yashodasportsfaculty.me/faculty-login.php
      -> Faculty login form appears
 
-  3. Log in as:  eng_faculty / Faculty@123
+  3. Log in with a faculty account (use the password you set — the
+     seeded default passwords must have been changed).
      -> Should redirect to faculty-select.php
 
   4. https://yashodasportsfaculty.me/faculty-select.php
@@ -480,6 +524,10 @@ $readme = @'
  Symptom: "db_setup: DB_SETUP_TOKEN env var is not set"
  Cause:   DB_SETUP_TOKEN not in config.local.php
  Fix:     Add it to config.local.php and wait 5 min for .user.ini cache
+
+ Symptom: 404 on db_setup.php / db_migrate_vNN.php
+ Cause:   The zip was built without -IncludeSetup (this is the default)
+ Fix:     Rebuild with -IncludeSetup (see Step 5), run it, then delete it
 
  Symptom: White page / 500 Internal Server Error
  Cause:   PHP fatal error

@@ -3,7 +3,7 @@
  * Student profile wizard.
  *
  * GET (no params)        -> redirect to ?step=<form_step or 1>
- * GET ?step=N (1..6)     -> render that step of the wizard
+ * GET ?step=N (1..7)     -> render that step of the wizard
  * GET ?new=1             -> ignored (legacy entry point); redirects to step 1
  *
  * Steps:
@@ -12,13 +12,14 @@
  *   3 — Sports Information
  *   4 — Played History
  *   5 — Documents (department-specific uploads)
- *   6 — Preview & Submit (read-only review)
+ *   6 — Jersey Details (number + size, stored on the student's own record)
+ *   7 — Preview & Submit (read-only review)
  *
  * Per-step saves POST to student_dashboard_process.php?step=N.
  * Step 5 (documents) uses fetch() against the same endpoint with JSON responses.
- * Step 6 Submit POSTs to student_dashboard_process.php?finalize=1.
+ * Step 7 Submit POSTs to student_dashboard_process.php?finalize=1.
  *
- * State is stored on the students row in form_step (1..6) and
+ * State is stored on the students row in form_step (1..7) and
  * form_submitted_at (NULL until first submit). Refresh always resumes
  * at the last step the student reached.
  */
@@ -59,9 +60,9 @@ $formLocked = student_form_locked($student);
  * ----------------------------------------------------------------- */
 $requestedStep = isset($_GET['step']) ? (int)$_GET['step'] : 0;
 $persistedStep = (int)($student['form_step'] ?? 0);
-if ($persistedStep < 1 || $persistedStep > 6) $persistedStep = 1;
+if ($persistedStep < 1 || $persistedStep > 7) $persistedStep = 1;
 
-if ($requestedStep < 1 || $requestedStep > 6) {
+if ($requestedStep < 1 || $requestedStep > 7) {
     /* Land at last-completed step (or 1 if never started) */
     redirect('student-dashboard.php?step=' . $persistedStep);
 }
@@ -219,8 +220,11 @@ $wizard_steps = [
     3 => ['label' => 'Sports',       'sub' => 'Your Sports',      'icon' => 'bi-trophy'],
     4 => ['label' => 'Played',       'sub' => 'Match History',    'icon' => 'bi-clock-history'],
     5 => ['label' => 'Documents',    'sub' => 'Upload Files',     'icon' => 'bi-file-earmark-text'],
-    6 => ['label' => 'Preview',      'sub' => 'Review & Submit',  'icon' => 'bi-eye'],
+    6 => ['label' => 'Jersey',       'sub' => 'Kit Details',      'icon' => 'bi-person-badge'],
+    7 => ['label' => 'Preview',      'sub' => 'Review & Submit',  'icon' => 'bi-eye'],
 ];
+$jersey_size_labels = jersey_size_options();
+$shorts_size_labels = shorts_size_options();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -748,20 +752,20 @@ $wizard_steps = [
         </div>
 
         <?php if ($flash_ok): ?>
-            <div class="alert-banner success"><i class="bi bi-check-circle"></i> <?= h($flash_ok['msg']) ?></div>
+            <div class="alert-banner success" role="alert"><i class="bi bi-check-circle"></i> <?= h($flash_ok['msg']) ?></div>
         <?php endif; ?>
         <?php if ($flash_err): ?>
-            <div class="alert-banner error"><i class="bi bi-exclamation-circle"></i> <?= h($flash_err['msg']) ?></div>
+            <div class="alert-banner error" role="alert"><i class="bi bi-exclamation-circle"></i> <?= h($flash_err['msg']) ?></div>
         <?php endif; ?>
         <?php if (!$formLocked && (int)($student['is_self_registered'] ?? 0) === 1
                   && (empty($student['sport_1']) || empty($student['enrollment_no']) || str_starts_with((string)$student['enrollment_no'], 'SELF-'))): ?>
-            <div class="alert-banner warn">
+            <div class="alert-banner warn" role="alert">
                 <i class="bi bi-info-circle"></i>
                 Please complete your profile using the wizard below. On Step 2 (Academic Details) you'll need to enter your official college PRN/Enrollment number.
             </div>
         <?php endif; ?>
 
-        <?php $previewOnly = $formLocked && $step === 6 && isset($_GET['preview']); ?>
+        <?php $previewOnly = $formLocked && $step === 7 && isset($_GET['preview']); ?>
         <?php if ($formLocked && !$previewOnly): ?>
         <div class="submitted-card">
             <div class="submitted-hero">
@@ -784,7 +788,7 @@ $wizard_steps = [
                     </div>
                 <?php endif; ?>
                 <div class="submitted-actions">
-                    <a href="student-dashboard.php?step=6&amp;preview=1" class="btn-cancel">
+                    <a href="student-dashboard.php?step=7&amp;preview=1" class="btn-cancel">
                         <i class="bi bi-eye"></i> Preview My Submitted Form
                     </a>
                 </div>
@@ -828,21 +832,21 @@ $wizard_steps = [
                         <span class="step-label"><i class="bi <?= h($ws['icon']) ?>"></i> <?= h($ws['label']) ?></span>
                         <span class="step-sublabel"><?= h($ws['sub']) ?></span>
                     </a>
-                    <?php if ($i < 6): ?>
+                    <?php if ($i < 7): ?>
                         <span class="pipeline-conn <?= $i < $step ? 'done' : '' ?>"></span>
                     <?php endif; ?>
                 <?php endforeach; ?>
             </div>
             <div class="pipeline-progress-bar">
-                <span>Step <strong><?= $step ?></strong> of <strong>6</strong></span>
+                <span>Step <strong><?= $step ?></strong> of <strong>7</strong></span>
                 <div class="progress-track">
-                    <div class="progress-fill" style="width:<?= round(($step / 6) * 100) ?>%"></div>
+                    <div class="progress-fill" style="width:<?= round(($step / 7) * 100) ?>%"></div>
                 </div>
-                <span><?= round(($step / 6) * 100) ?>% Complete</span>
+                <span><?= round(($step / 7) * 100) ?>% Complete</span>
             </div>
 
             <?php if ($previewOnly): ?>
-                <div class="alert-banner info" style="margin:1.2rem 1.2rem 0">
+                <div class="alert-banner info" role="alert" style="margin:1.2rem 1.2rem 0">
                     <i class="bi bi-eye"></i>
                     Read-only preview of your submitted profile.
                     <a href="student-dashboard.php" style="margin-left:auto">Back to status</a>
@@ -1563,7 +1567,7 @@ $wizard_steps = [
                 </div>
                 <div class="wizard-body">
                     <?php if (!$documents): ?>
-                        <div class="alert-banner info">
+                        <div class="alert-banner info" role="alert">
                             <i class="bi bi-info-circle"></i>
                             No documents are required for <?= h($student['dept_name']) ?>. You can proceed to the preview.
                         </div>
@@ -1619,7 +1623,7 @@ $wizard_steps = [
                                         <?php endif; ?>
                                     </div>
                                 </div>
-                                <div class="doc-status" id="doc-status-<?= $req_id ?>">
+                                <div class="doc-status" id="doc-status-<?= $req_id ?>" role="alert" aria-live="polite">
                                     <?php if ($uploaded): ?>
                                         Uploaded <?= h(date('d M Y H:i', strtotime((string)$doc['uploaded_at']))) ?>
                                     <?php else: ?>
@@ -1639,7 +1643,7 @@ $wizard_steps = [
                                         <div class="form-group">
                                             <label for="bank_account_number_confirm">Confirm Account Number *</label>
                                             <input type="text" id="bank_account_number_confirm" name="bank_account_number_confirm" maxlength="30"
-                                                   inputmode="numeric" autocomplete="off" onpaste="return false"
+                                                   inputmode="numeric" autocomplete="off"
                                                    aria-describedby="bankConfirmError"
                                                    value="<?= h((string)($student['bank_account_number'] ?? '')) ?>">
                                             <div class="bank-field-error" id="bankConfirmError" role="alert" aria-live="polite"></div>
@@ -1674,13 +1678,64 @@ $wizard_steps = [
 
                     <div class="wizard-actions">
                         <a href="student-dashboard.php?step=4" class="btn-cancel btn-back"><i class="bi bi-arrow-left"></i> Back</a>
-                        <a href="student-dashboard.php?step=6" class="btn-save btn-next"><i class="bi bi-arrow-right-circle"></i> Continue to Preview</a>
+                        <a href="student-dashboard.php?step=6" class="btn-save btn-next"><i class="bi bi-arrow-right-circle"></i> Continue to Jersey Details</a>
                     </div>
                 </div>
 
             <?php elseif ($step === 6): ?>
                 <div class="wizard-head">
-                    <h2><i class="bi bi-eye" style="color: var(--accent-gold)"></i> Step 6 — <?= $formLocked ? 'Submitted Profile' : 'Preview &amp; Submit' ?></h2>
+                    <h2><i class="bi bi-person-badge" style="color: var(--accent-gold)"></i> Step 6 — Jersey Details</h2>
+                    <p>Enter the jersey number and size you'd like for your sports kit. Your faculty can look this up anytime from the Jersey Kit section.</p>
+                </div>
+                <div class="wizard-body">
+                    <form method="post" action="student_dashboard_process.php?step=6">
+                        <?= csrf_field() ?>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="jersey_size">Jersey Size</label>
+                                <select id="jersey_size" name="jersey_size">
+                                    <option value="">— Select —</option>
+                                    <?php foreach ($jersey_size_labels as $code => $label): ?>
+                                        <option value="<?= h($code) ?>" <?= is_selected($code, $student['jersey_size'] ?? '') ?>><?= h($label) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="jersey_number">Jersey Number</label>
+                                <input type="text" id="jersey_number" name="jersey_number" maxlength="10"
+                                       inputmode="numeric" placeholder="e.g. 7"
+                                       value="<?= h((string)($student['jersey_number'] ?? '')) ?>">
+                                <div class="hint"><strong>Note: final number is subject to change as per match requirement.</strong></div>
+                            </div>
+                            <div class="form-group">
+                                <label for="shorts_size">Shorts Size</label>
+                                <select id="shorts_size" name="shorts_size">
+                                    <option value="">— Select —</option>
+                                    <?php foreach ($shorts_size_labels as $code => $label): ?>
+                                        <option value="<?= h($code) ?>" <?= is_selected($code, $student['shorts_size'] ?? '') ?>><?= h($label) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="track_size">Track Pant Size</label>
+                                <select id="track_size" name="track_size">
+                                    <option value="">— Select —</option>
+                                    <?php foreach ($shorts_size_labels as $code => $label): ?>
+                                        <option value="<?= h($code) ?>" <?= is_selected($code, $student['track_size'] ?? '') ?>><?= h($label) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="wizard-actions">
+                            <a href="student-dashboard.php?step=5" class="btn-cancel btn-back"><i class="bi bi-arrow-left"></i> Back</a>
+                            <button type="submit" class="btn-save btn-next"><i class="bi bi-arrow-right-circle"></i> Continue to Preview</button>
+                        </div>
+                    </form>
+                </div>
+
+            <?php elseif ($step === 7): ?>
+                <div class="wizard-head">
+                    <h2><i class="bi bi-eye" style="color: var(--accent-gold)"></i> Step 7 — <?= $formLocked ? 'Submitted Profile' : 'Preview &amp; Submit' ?></h2>
                     <?php if ($formLocked): ?>
                         <p>This is a read-only view of what you submitted. Your faculty must re-open editing before you can make changes.</p>
                     <?php else: ?>
@@ -1870,6 +1925,19 @@ $wizard_steps = [
                             <?php endif; ?>
                         </div>
 
+                        <div class="preview-card">
+                            <div class="preview-card-head">
+                                <div class="preview-card-title"><span class="preview-card-icon"><i class="bi bi-person-badge"></i></span> Jersey Details</div>
+                                <?php if (!$formLocked): ?><a class="preview-edit-link" href="student-dashboard.php?step=6"><i class="bi bi-pencil"></i> Edit</a><?php endif; ?>
+                            </div>
+                            <div class="preview-grid">
+                                <div class="preview-field"><span class="preview-field-label">Jersey Size</span><span class="preview-field-value"><?= $yes($jersey_size_labels[$student['jersey_size'] ?? ''] ?? (string)($student['jersey_size'] ?? '')) ?></span></div>
+                                <div class="preview-field"><span class="preview-field-label">Jersey Number</span><span class="preview-field-value"><?= $yes((string)($student['jersey_number'] ?? '')) ?></span></div>
+                                <div class="preview-field"><span class="preview-field-label">Shorts Size</span><span class="preview-field-value"><?= $yes($shorts_size_labels[$student['shorts_size'] ?? ''] ?? (string)($student['shorts_size'] ?? '')) ?></span></div>
+                                <div class="preview-field"><span class="preview-field-label">Track Pant Size</span><span class="preview-field-value"><?= $yes($shorts_size_labels[$student['track_size'] ?? ''] ?? (string)($student['track_size'] ?? '')) ?></span></div>
+                            </div>
+                        </div>
+
                     </div>
 
                     <?php if ($formLocked): ?>
@@ -1878,7 +1946,7 @@ $wizard_steps = [
                         </div>
                     <?php else: ?>
                         <?php if ($required_total > 0 && $required_uploaded < $required_total): ?>
-                            <div class="alert-banner warn" style="margin-top:1.2rem">
+                            <div class="alert-banner warn" role="alert" style="margin-top:1.2rem">
                                 <i class="bi bi-exclamation-triangle"></i>
                                 <?= (int)($required_total - $required_uploaded) ?> required document(s) still missing. You can submit anyway — the Faculty of Sports will follow up.
                             </div>
@@ -1887,7 +1955,7 @@ $wizard_steps = [
                         <form method="post" action="student_dashboard_process.php?finalize=1">
                             <?= csrf_field() ?>
                             <div class="wizard-actions">
-                                <a href="student-dashboard.php?step=5" class="btn-cancel btn-back"><i class="bi bi-arrow-left"></i> Back to Documents</a>
+                                <a href="student-dashboard.php?step=6" class="btn-cancel btn-back"><i class="bi bi-arrow-left"></i> Back to Jersey Details</a>
                                 <?php if (!empty($student['form_submitted_at'])): ?>
                                     <button type="submit" class="btn-save"><i class="bi bi-check-circle"></i> Re-submit Profile</button>
                                     <span style="font-size:.8rem; color: var(--medium-gray)">
@@ -2014,7 +2082,6 @@ $wizard_steps = [
                         var pdfMsg = 'Only PDF files are accepted for this document. "' + (file.name || '') +
                             '" is not a PDF. Please convert and try again.';
                         if (status) { status.textContent = pdfMsg; status.style.color = '#b91c1c'; }
-                        alert(pdfMsg);
                         input.value = '';
                         return;
                     }
@@ -2024,7 +2091,6 @@ $wizard_steps = [
                         var jpgMsg = 'Only JPEG/JPG files are accepted for the photo. "' + (file.name || '') +
                             '" is not a JPEG. Please convert and try again.';
                         if (status) { status.textContent = jpgMsg; status.style.color = '#b91c1c'; }
-                        alert(jpgMsg);
                         input.value = '';
                         return;
                     }
@@ -2034,7 +2100,6 @@ $wizard_steps = [
                     var sizeMsg = 'File is too large: "' + file.name + '" is ' +
                         (file.size / 1024 / 1024).toFixed(2) + ' MB. Maximum allowed size is 1 MB. Please compress and try again.';
                     if (status) { status.textContent = sizeMsg; status.style.color = '#b91c1c'; }
-                    alert(sizeMsg);
                     input.value = '';
                     return;
                 }
@@ -2055,10 +2120,11 @@ $wizard_steps = [
                 var reqId = btn.getAttribute('data-req');
                 if (!confirm('Remove this uploaded document?')) return;
                 btn.disabled = true;
+                var status = document.getElementById('doc-status-' + reqId);
                 postDocDelete(reqId,
                     function () { location.reload(); },
                     function (err) {
-                        alert('Delete failed: ' + err);
+                        if (status) { status.textContent = 'Delete failed: ' + err; status.style.color = '#b91c1c'; }
                         btn.disabled = false;
                     }
                 );

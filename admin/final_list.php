@@ -77,7 +77,11 @@ $saved_lists = db_select(
 );
 
 // ---- current final list rows ----
-$list_rows = [];
+$list_rows  = [];
+$list_total = 0;
+$lpage      = max(1, (int)($_GET['lpage'] ?? 1));
+$lper       = 50;
+$lpages     = 1;
 if ($has_list) {
     [$lscope, $lp, $lt] = scope_sql_department('s');
     // Hide wizard drafts (students who registered but haven't hit Final Submit).
@@ -85,6 +89,26 @@ if ($has_list) {
     $lscope .= $visible[0];
     $lp      = array_merge($lp, $visible[1]);
     $lt     .= $visible[2];
+
+    $list_where_sql = "ft.game_name = ?
+            AND ft.event_label = ?
+            AND ft.academic_year <=> ?
+            AND ft.gender <=> ?
+            $lscope";
+    $list_where_params = array_merge([$game, $event, $ay === '' ? null : $ay, $gender], $lp);
+    $list_where_types  = 'ssss' . $lt;
+
+    $list_total = (int)(db_one(
+        "SELECT COUNT(*) AS n
+           FROM final_teams ft
+           JOIN students s ON s.id = ft.student_id
+          WHERE $list_where_sql",
+        $list_where_params, $list_where_types
+    )['n'] ?? 0);
+    $lpages = max(1, (int)ceil($list_total / $lper));
+    if ($lpage > $lpages) $lpage = $lpages;
+    $loffset = ($lpage - 1) * $lper;
+
     $list_rows = db_select(
         "SELECT ft.id AS entry_id, ft.roll_no, ft.created_at,
                 s.id, s.enrollment_no, s.full_name,
@@ -94,13 +118,10 @@ if ($has_list) {
            FROM final_teams ft
            JOIN students s    ON s.id = ft.student_id
            JOIN departments d ON d.id = s.department_id
-          WHERE ft.game_name = ?
-            AND ft.event_label = ?
-            AND ft.academic_year <=> ?
-            AND ft.gender <=> ?
-            $lscope
-          ORDER BY ft.created_at ASC, s.enrollment_no ASC",
-        array_merge([$game, $event, $ay === '' ? null : $ay, $gender], $lp), 'ssss' . $lt
+          WHERE $list_where_sql
+          ORDER BY ft.created_at ASC, s.enrollment_no ASC
+          LIMIT $lper OFFSET $loffset",
+        $list_where_params, $list_where_types
     );
 }
 
@@ -324,11 +345,13 @@ $flash_err = flash_get('final_error');
                     <div class="sidebar-nav-label">Site Content</div>
                     <a href="notices_list.php"><i class="bi bi-megaphone"></i> <span>Notices</span></a>
                     <a href="achievements_list.php"><i class="bi bi-trophy"></i> <span>Achievements</span></a>
+                    <a href="committee_manage.php"><i class="bi bi-people-fill"></i> <span>Committee</span></a>
                 <?php endif; ?>
                 <?php if ($me['role'] === 'SUPER_ADMIN'): ?>
                     <div class="sidebar-nav-label">Admin</div>
                     <a href="faculty_manage.php"><i class="bi bi-people-fill"></i> <span>Faculty Management</span></a>
                     <a href="document_requirements.php"><i class="bi bi-file-earmark-ruled"></i> <span>Document Requirements</span></a>
+                    <a href="sports_assign.php"><i class="bi bi-trophy-fill"></i> <span>Sports Assignment</span></a>
                 <?php endif; ?>
                 <div class="sidebar-nav-label">Site</div>
                 <a href="../index.php"><i class="bi bi-globe"></i> <span>View Website</span></a>
@@ -340,7 +363,7 @@ $flash_err = flash_get('final_error');
                         <h4><?= h($me['full_name']) ?></h4>
                         <span><?= h($me['department_name'] ?? $me['role']) ?></span>
                     </div>
-                    <a href="logout.php?_csrf=<?= h(csrf_token()) ?>" class="btn-logout" title="Logout"><i class="bi bi-box-arrow-right"></i></a>
+                    <a href="logout.php?_csrf=<?= h(csrf_token()) ?>" class="btn-logout" title="Logout" aria-label="Logout"><i class="bi bi-box-arrow-right"></i></a>
                 </div>
             </div>
         </aside>
@@ -359,10 +382,10 @@ $flash_err = flash_get('final_error');
                 </div>
 
                 <?php if ($flash_ok): ?>
-                    <div class="alert-banner success"><i class="bi bi-check-circle"></i> <?= h($flash_ok['msg']) ?></div>
+                    <div class="alert-banner success" role="alert"><i class="bi bi-check-circle"></i> <?= h($flash_ok['msg']) ?></div>
                 <?php endif; ?>
                 <?php if ($flash_err): ?>
-                    <div class="alert-banner <?= h($flash_err['level'] === 'info' ? 'info' : 'error') ?>">
+                    <div class="alert-banner <?= h($flash_err['level'] === 'info' ? 'info' : 'error') ?>" role="alert">
                         <i class="bi bi-<?= $flash_err['level'] === 'info' ? 'info-circle' : 'exclamation-circle' ?>"></i>
                         <?= h($flash_err['msg']) ?>
                     </div>
@@ -420,7 +443,7 @@ $flash_err = flash_get('final_error');
                                     <table class="data-table">
                                         <thead>
                                             <tr>
-                                                <th style="width:36px"><input type="checkbox" id="selectAllStudents" title="Select all on this page"></th>
+                                                <th style="width:36px"><input type="checkbox" id="selectAllStudents" title="Select all on this page" aria-label="Select all on this page"></th>
                                                 <th>Student</th>
                                                 <th>Enrollment</th>
                                                 <th>Sports</th>
@@ -430,7 +453,7 @@ $flash_err = flash_get('final_error');
                                         <tbody>
                                         <?php foreach ($search_rows as $r): ?>
                                             <tr>
-                                                <td><input type="checkbox" class="student-check" name="student_id[]" value="<?= (int)$r['id'] ?>"></td>
+                                                <td><input type="checkbox" class="student-check" name="student_id[]" value="<?= (int)$r['id'] ?>" aria-label="Select <?= h($r['full_name']) ?>"></td>
                                                 <td>
                                                     <div class="student-cell">
                                                         <div class="student-avatar">
@@ -467,11 +490,11 @@ $flash_err = flash_get('final_error');
                                         $prev = max(1, $page - 1);
                                         $next = min($search_pages, $page + 1);
                                         ?>
-                                        <a class="<?= $page <= 1 ? 'disabled' : '' ?>" href="?<?= h($search_query.'&page='.$prev) ?>"><i class="bi bi-chevron-left"></i></a>
+                                        <a class="<?= $page <= 1 ? 'disabled' : '' ?>" aria-label="Previous page" href="?<?= h($search_query.'&page='.$prev) ?>"><i class="bi bi-chevron-left"></i></a>
                                         <?php for ($i = 1; $i <= $search_pages; $i++): ?>
                                             <a class="<?= $i === $page ? 'active' : '' ?>" href="?<?= h($search_query.'&page='.$i) ?>"><?= $i ?></a>
                                         <?php endfor; ?>
-                                        <a class="<?= $page >= $search_pages ? 'disabled' : '' ?>" href="?<?= h($search_query.'&page='.$next) ?>"><i class="bi bi-chevron-right"></i></a>
+                                        <a class="<?= $page >= $search_pages ? 'disabled' : '' ?>" aria-label="Next page" href="?<?= h($search_query.'&page='.$next) ?>"><i class="bi bi-chevron-right"></i></a>
                                     </div>
                                 </div>
                             <?php endif; ?>
@@ -482,9 +505,9 @@ $flash_err = flash_get('final_error');
                             <div class="data-card-header">
                                 <h2>
                                     <i class="bi bi-check-circle-fill"></i> &nbsp;Final Roster — <?= h($gender_label) ?>
-                                    <span class="count-pill"><?= count($list_rows) ?> player<?= count($list_rows) === 1 ? '' : 's' ?></span>
+                                    <span class="count-pill"><?= $list_total ?> player<?= $list_total === 1 ? '' : 's' ?></span>
                                 </h2>
-                                <?php if ($list_rows): ?>
+                                <?php if ($list_total > 0): ?>
                                     <div style="display:flex;gap:.5rem;flex-wrap:wrap">
                                         <a href="final_export_pdf.php?<?= h($list_query) ?>" class="btn btn-primary">
                                             <i class="bi bi-file-earmark-pdf"></i> Export PDF
@@ -500,7 +523,7 @@ $flash_err = flash_get('final_error');
                                     </div>
                                 <?php endif; ?>
                             </div>
-                            <?php if (!$list_rows): ?>
+                            <?php if ($list_total === 0): ?>
                                 <div class="empty-row">
                                     <i class="bi bi-person-x"></i>
                                     No players confirmed for this team yet.<br>
@@ -530,12 +553,29 @@ $flash_err = flash_get('final_error');
                                             <input type="hidden" name="event" value="<?= h($event) ?>">
                                             <input type="hidden" name="ay" value="<?= h($ay) ?>">
                                             <input type="hidden" name="gender" value="<?= h($gender) ?>">
-                                            <button type="submit" class="icon-remove" title="Remove">
+                                            <button type="submit" class="icon-remove" title="Remove" aria-label="Remove <?= h($r['full_name']) ?> from final team">
                                                 <i class="bi bi-x-lg"></i>
                                             </button>
                                         </form>
                                     </div>
                                 <?php endforeach; ?>
+                                <?php if ($lpages > 1): ?>
+                                    <div class="pagination">
+                                        <div class="info">Page <?= $lpage ?> of <?= $lpages ?> · <?= $list_total ?> total</div>
+                                        <div class="pages">
+                                            <?php
+                                            $lbase_q = http_build_query(array_filter(['game'=>$game,'event'=>$event,'ay'=>$ay,'gender'=>$gender]));
+                                            $lprev = max(1, $lpage - 1);
+                                            $lnext = min($lpages, $lpage + 1);
+                                            ?>
+                                            <a class="<?= $lpage <= 1 ? 'disabled' : '' ?>" aria-label="Previous page" href="?<?= h($lbase_q.'&lpage='.$lprev) ?>"><i class="bi bi-chevron-left"></i></a>
+                                            <?php for ($i = 1; $i <= $lpages; $i++): ?>
+                                                <a class="<?= $i === $lpage ? 'active' : '' ?>" href="?<?= h($lbase_q.'&lpage='.$i) ?>"><?= $i ?></a>
+                                            <?php endfor; ?>
+                                            <a class="<?= $lpage >= $lpages ? 'disabled' : '' ?>" aria-label="Next page" href="?<?= h($lbase_q.'&lpage='.$lnext) ?>"><i class="bi bi-chevron-right"></i></a>
+                                        </div>
+                                    </div>
+                                <?php endif; ?>
                             <?php endif; ?>
                         </div>
                     </div>
@@ -634,6 +674,18 @@ $flash_err = flash_get('final_error');
                                         <a class="btn btn-secondary" style="padding:.3rem .65rem;font-size:.78rem" href="<?= h($open_url) ?>" title="Edit this team">
                                             <i class="bi bi-pencil-square"></i> Edit
                                         </a>
+                                        <form method="post" action="final_list_delete.php"
+                                              onsubmit="return confirm('Delete this entire final team (<?= $count ?> player<?= $count === 1 ? '' : 's' ?>)? This cannot be undone.');"
+                                              style="margin:0">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="game" value="<?= h($sl['game_name']) ?>">
+                                            <input type="hidden" name="event" value="<?= h($sl['event_label']) ?>">
+                                            <input type="hidden" name="ay" value="<?= h($sl['academic_year'] ?? '') ?>">
+                                            <input type="hidden" name="gender" value="<?= h($sl_gender) ?>">
+                                            <button type="submit" class="icon-remove" title="Delete final team" aria-label="Delete final team — <?= h($sl['game_name']) ?> <?= h($sl_gender_label) ?>">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
                                     </div>
                                 <?php endforeach; ?>
                             <?php endif; ?>

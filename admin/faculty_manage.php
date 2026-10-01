@@ -11,7 +11,10 @@ require_role('SUPER_ADMIN');
 
 $me = current_faculty();
 $action = $_GET['action'] ?? 'list';
-$id     = (int)($_GET['id'] ?? 0);
+// Falls back to $_POST['id'] because the delete/toggle-active forms below
+// POST to plain faculty_manage.php with no ?id= in the URL — only a hidden
+// POST field. GET-based id (the edit link/form) still takes priority.
+$id     = (int)($_GET['id'] ?? $_POST['id'] ?? 0);
 
 $ok  = flash_get('faculty_saved');
 $err = flash_get('faculty_error');
@@ -86,6 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($do === 'edit' && $id > 0) {
+        $username  = trim((string)($_POST['username']  ?? ''));
         $full_name = trim((string)($_POST['full_name'] ?? ''));
         $email     = trim((string)($_POST['email']     ?? ''));
         $phone     = trim((string)($_POST['phone']     ?? ''));
@@ -94,8 +98,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $new_pw    = (string)($_POST['new_password'] ?? '');
         $dept_ids  = faculty_posted_dept_ids();
 
-        if ($full_name === '' || $email === '') {
-            flash_set('faculty_error', 'Name and email are required.', 'error');
+        if ($username === '' || $full_name === '' || $email === '') {
+            flash_set('faculty_error', 'Username, name and email are required.', 'error');
+            redirect("faculty_manage.php?action=edit&id=$id");
+        }
+        if (!preg_match('/^[a-z0-9_]+$/', $username)) {
+            flash_set('faculty_error', 'Username may only contain lowercase letters, digits and underscore.', 'error');
             redirect("faculty_manage.php?action=edit&id=$id");
         }
         if ($role === 'FACULTY' && !$dept_ids) {
@@ -113,21 +121,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect("faculty_manage.php?action=edit&id=$id");
         }
 
+        $dupe = db_one('SELECT id FROM faculty WHERE username = ? AND id <> ?', [$username, $id], 'si');
+        if ($dupe) {
+            flash_set('faculty_error', "Username '$username' is already taken.", 'error');
+            redirect("faculty_manage.php?action=edit&id=$id");
+        }
+
+        if ($new_pw !== '' && strlen($new_pw) < 8) {
+            flash_set('faculty_error', 'Password must be 8+ characters.', 'error');
+            redirect("faculty_manage.php?action=edit&id=$id");
+        }
+
         db_execute(
-            'UPDATE faculty SET full_name=?, email=?, phone=?, is_active=?, role=?, must_reset_pw=? WHERE id=?',
-            [$full_name, $email, $phone ?: null, $is_active, $role, $new_pw !== '' ? 1 : 0, $id],
-            'sssisii'
+            'UPDATE faculty SET username=?, full_name=?, email=?, phone=?, is_active=?, role=?, must_reset_pw=? WHERE id=?',
+            [$username, $full_name, $email, $phone ?: null, $is_active, $role, $new_pw !== '' ? 1 : 0, $id],
+            'ssssisii'
         );
         if ($new_pw !== '') {
-            if (strlen($new_pw) < 8) {
-                flash_set('faculty_error', 'Password must be 8+ characters.', 'error');
-                redirect("faculty_manage.php?action=edit&id=$id");
-            }
             $hash = password_hash($new_pw, PASSWORD_BCRYPT, ['cost' => 12]);
             db_execute('UPDATE faculty SET password_hash=? WHERE id=?', [$hash, $id], 'si');
         }
         faculty_sync_departments($id, $role === 'FACULTY' ? $dept_ids : []);
+
+        // Keep the active session in sync if the super-admin just edited their own login.
+        if ($id === (int)$me['id']) {
+            $_SESSION['faculty_username'] = $username;
+            $_SESSION['faculty_name']     = $full_name;
+            $_SESSION['faculty_role']     = $role;
+            if ($new_pw !== '') {
+                $_SESSION['must_reset_pw'] = 1;
+            }
+        }
+
         flash_set('faculty_saved', 'Faculty updated.', 'success');
+        redirect('faculty_manage.php');
+    }
+
+    if ($do === 'toggle_active' && $id > 0) {
+        if ($id === (int)$me['id']) {
+            flash_set('faculty_error', 'You cannot deactivate yourself.', 'error');
+            redirect('faculty_manage.php');
+        }
+        $target = db_one('SELECT role, is_active FROM faculty WHERE id=?', [$id], 'i');
+        if (!$target) {
+            flash_set('faculty_error', 'Faculty not found.', 'error');
+            redirect('faculty_manage.php');
+        }
+        $new_active = $target['is_active'] ? 0 : 1;
+        if (!$new_active) {
+            // Don't allow deactivating the last active super-admin
+            $admins = (int)(db_one("SELECT COUNT(*) AS n FROM faculty WHERE role='SUPER_ADMIN' AND is_active=1")['n'] ?? 0);
+            if ($target['role'] === 'SUPER_ADMIN' && $admins <= 1) {
+                flash_set('faculty_error', 'Cannot deactivate the last active super-admin.', 'error');
+                redirect('faculty_manage.php');
+            }
+        }
+        db_execute('UPDATE faculty SET is_active=? WHERE id=?', [$new_active, $id], 'ii');
+        flash_set('faculty_saved', $new_active ? 'Faculty reactivated.' : 'Faculty deactivated.', 'success');
         redirect('faculty_manage.php');
     }
 
@@ -136,15 +186,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash_set('faculty_error', 'You cannot delete yourself.', 'error');
             redirect('faculty_manage.php');
         }
-        // Don't allow deleting the last super-admin
+        $target = db_one('SELECT username, role, is_active FROM faculty WHERE id=?', [$id], 'i');
+        if (!$target) {
+            flash_set('faculty_error', 'Faculty not found.', 'error');
+            redirect('faculty_manage.php');
+        }
+        // Don't allow deleting the last active super-admin
         $admins = (int)(db_one("SELECT COUNT(*) AS n FROM faculty WHERE role='SUPER_ADMIN' AND is_active=1")['n'] ?? 0);
-        $target = db_one('SELECT role, is_active FROM faculty WHERE id=?', [$id], 'i');
-        if ($target && $target['role'] === 'SUPER_ADMIN' && $target['is_active'] == 1 && $admins <= 1) {
+        if ($target['role'] === 'SUPER_ADMIN' && $target['is_active'] == 1 && $admins <= 1) {
             flash_set('faculty_error', 'Cannot delete the last active super-admin.', 'error');
             redirect('faculty_manage.php');
         }
-        db_execute('UPDATE faculty SET is_active=0 WHERE id=?', [$id], 'i');
-        flash_set('faculty_saved', 'Faculty deactivated.', 'success');
+        $confirm_username = trim((string)($_POST['confirm_username'] ?? ''));
+        if ($confirm_username === '' || $confirm_username !== $target['username']) {
+            flash_set('faculty_error', 'Typed username did not match — nothing was deleted.', 'error');
+            redirect('faculty_manage.php');
+        }
+        // Related rows are FK-safe: faculty_departments/password_resets cascade,
+        // students.created_by / notices.posted_by / hero_settings.updated_by /
+        // final_teams.added_by / provisional_entries.added_by all go NULL
+        // (see sql/migration-v48-provisional-added-by-nullable.sql for the
+        // last one — it used to RESTRICT, which made this fail silently).
+        try {
+            db_execute('DELETE FROM faculty WHERE id=?', [$id], 'i');
+        } catch (Throwable $e) {
+            error_log('[faculty_manage] delete failed for faculty #' . $id . ': ' . $e->getMessage());
+            flash_set('faculty_error', 'Could not delete this account — it is still referenced by other records. Deactivate it instead, or check php_errors.log.', 'error');
+            redirect('faculty_manage.php');
+        }
+        error_log(sprintf(
+            '[faculty_manage] %s (faculty #%d) permanently deleted faculty account "%s" (#%d)',
+            $me['username'] ?? '?', (int)$me['id'], $target['username'], $id
+        ));
+        flash_set('faculty_saved', "Faculty '{$target['username']}' permanently deleted.", 'success');
         redirect('faculty_manage.php');
     }
 }
@@ -252,6 +326,26 @@ if ($action === 'edit' && $id > 0) {
         .faculties-cell{font-size:.82rem;color:var(--text-dark)}
         .faculties-cell .all{color:var(--accent-maroon);font-weight:600}
         .faculties-cell .none{color:var(--medium-gray);font-style:italic}
+        .btn-danger-solid{display:inline-flex;align-items:center;gap:.45rem;white-space:nowrap;padding:.62rem 1.2rem;border:none;border-radius:8px;background:#c53030;color:#fff;font:inherit;font-size:.85rem;font-weight:600;cursor:pointer;transition:var(--transition-smooth)}
+        .btn-danger-solid:hover:not(:disabled){background:#9b2c2c;box-shadow:0 6px 18px rgba(197,48,48,.28);transform:translateY(-1px)}
+        .btn-danger-solid:disabled{opacity:.5;cursor:not-allowed}
+        .dm-modal{position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;z-index:2000;padding:1rem}
+        .dm-modal[hidden]{display:none}
+        .dm-modal-box{background:#fff;border-radius:12px;max-width:460px;width:100%;box-shadow:0 24px 60px rgba(0,0,0,.35);overflow:hidden;animation:dmPop .14s ease-out}
+        @keyframes dmPop{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+        .dm-modal-head{display:flex;align-items:center;justify-content:space-between;padding:.95rem 1.25rem;background:#fff5f5;border-bottom:1px solid #fed7d7}
+        .dm-modal-head h3{margin:0;font-size:.98rem;font-weight:700;color:#c53030;display:flex;align-items:center;gap:.5rem}
+        .dm-modal-x{background:0 0;border:none;font-size:1.5rem;line-height:1;color:var(--medium-gray);cursor:pointer;padding:0 .25rem}
+        .dm-modal-x:hover{color:var(--text-dark)}
+        .dm-modal-body{padding:1.25rem}
+        .dm-modal-body>p{font-size:.86rem;color:var(--text-dark);margin:0 0 .5rem;line-height:1.55}
+        .dm-modal-body label{display:block;font-size:.78rem;font-weight:600;color:var(--primary-navy);margin:.9rem 0 .3rem}
+        .dm-modal-body code{background:var(--off-white);border:1px solid var(--light-gray);border-radius:4px;padding:.05rem .35rem;font-size:.8rem;color:#c53030;font-weight:700}
+        .dm-modal-body input{width:100%;padding:.55rem .75rem;border:1px solid var(--light-gray);border-radius:6px;font:inherit;font-size:.9rem;letter-spacing:.5px}
+        .dm-modal-body input:focus{outline:none;border-color:#c53030;box-shadow:0 0 0 3px rgba(197,48,48,.12)}
+        .dm-modal-actions{display:flex;gap:.6rem;justify-content:flex-end;margin-top:1.4rem}
+        .btn-ghost{padding:.55rem 1rem;border:1px solid var(--light-gray);border-radius:8px;background:#fff;color:var(--text-dark);font:inherit;font-size:.85rem;font-weight:600;cursor:pointer}
+        .btn-ghost:hover{background:var(--off-white)}
         @media(max-width:992px){
             .sidebar{position:fixed;left:-280px;top:0;height:100vh;transition:left .3s ease;z-index:1050}
             .sidebar.open{left:0}
@@ -292,9 +386,11 @@ if ($action === 'edit' && $id > 0) {
                 <div class="sidebar-nav-label">Site Content</div>
                 <a href="notices_list.php"><i class="bi bi-megaphone"></i> <span>Notices</span></a>
                 <a href="achievements_list.php"><i class="bi bi-trophy"></i> <span>Achievements</span></a>
+                <a href="committee_manage.php"><i class="bi bi-people-fill"></i> <span>Committee</span></a>
                 <div class="sidebar-nav-label">Admin</div>
                 <a href="faculty_manage.php" class="active"><i class="bi bi-people-fill"></i> <span>Faculty Management</span></a>
                 <a href="document_requirements.php"><i class="bi bi-file-earmark-ruled"></i> <span>Document Requirements</span></a>
+                <a href="sports_assign.php"><i class="bi bi-trophy-fill"></i> <span>Sports Assignment</span></a>
                 <div class="sidebar-nav-label">Site</div>
                 <a href="../index.php"><i class="bi bi-globe"></i> <span>View Website</span></a>
             </nav>
@@ -305,7 +401,7 @@ if ($action === 'edit' && $id > 0) {
                         <h4><?= h($me['full_name']) ?></h4>
                         <span><?= h($me['role']) ?></span>
                     </div>
-                    <a href="logout.php?_csrf=<?= h(csrf_token()) ?>" class="btn-logout" title="Logout"><i class="bi bi-box-arrow-right"></i></a>
+                    <a href="logout.php?_csrf=<?= h(csrf_token()) ?>" class="btn-logout" title="Logout" aria-label="Logout"><i class="bi bi-box-arrow-right"></i></a>
                 </div>
             </div>
         </aside>
@@ -321,8 +417,8 @@ if ($action === 'edit' && $id > 0) {
             </header>
 
             <div class="content-body">
-                <?php if ($ok): ?><div class="alert-banner success"><i class="bi bi-check-circle"></i> <?= h($ok['msg']) ?></div><?php endif; ?>
-                <?php if ($err): ?><div class="alert-banner error"><i class="bi bi-exclamation-circle"></i> <?= h($err['msg']) ?></div><?php endif; ?>
+                <?php if ($ok): ?><div class="alert-banner success" role="alert"><i class="bi bi-check-circle"></i> <?= h($ok['msg']) ?></div><?php endif; ?>
+                <?php if ($err): ?><div class="alert-banner error" role="alert"><i class="bi bi-exclamation-circle"></i> <?= h($err['msg']) ?></div><?php endif; ?>
 
                 <?php if ($action === 'new' || ($action === 'edit' && $edit_user)): ?>
                     <div class="page-header">
@@ -335,12 +431,11 @@ if ($action === 'edit' && $id > 0) {
                         <?php if ($action === 'edit'): ?><input type="hidden" name="id" value="<?= (int)$edit_user['id'] ?>"><?php endif; ?>
 
                         <div class="form-grid">
-                            <?php if ($action === 'new'): ?>
-                                <div class="form-group">
-                                    <label>Username *</label>
-                                    <input type="text" name="username" required pattern="[a-z0-9_]+" title="lowercase letters, digits, underscore">
-                                </div>
-                            <?php endif; ?>
+                            <div class="form-group">
+                                <label>Username *</label>
+                                <input type="text" name="username" required pattern="[a-z0-9_]+" title="lowercase letters, digits, underscore"
+                                       value="<?= h($edit_user['username'] ?? '') ?>">
+                            </div>
                             <div class="form-group">
                                 <label>Full Name *</label>
                                 <input type="text" name="full_name" required value="<?= h($edit_user['full_name'] ?? '') ?>">
@@ -386,7 +481,7 @@ if ($action === 'edit' && $id > 0) {
                             <?php endif; ?>
                             <div class="form-group">
                                 <label><?= $action === 'new' ? 'Password * (min 8 chars)' : 'New Password (leave blank to keep)' ?></label>
-                                <input type="password" name="<?= $action==='new' ? 'password' : 'new_password' ?>" <?= $action==='new' ? 'required minlength="8"' : 'minlength="8"' ?>>
+                                <input type="password" name="<?= $action==='new' ? 'password' : 'new_password' ?>" autocomplete="new-password" <?= $action==='new' ? 'required minlength="8"' : 'minlength="8"' ?>>
                                 <?php if ($action === 'edit'): ?>
                                     <small style="color:var(--medium-gray);font-size:.78rem">If set, the user will be required to change it on next login.</small>
                                 <?php endif; ?>
@@ -446,18 +541,60 @@ if ($action === 'edit' && $id > 0) {
                                             <i class="bi bi-pencil"></i> Edit
                                         </a>
                                         <?php if ((int)$u['id'] !== (int)$me['id']): ?>
-                                            <form method="post" action="faculty_manage.php" style="display:inline" onsubmit="return confirm('Deactivate this user?');">
+                                            <form method="post" action="faculty_manage.php" style="display:inline"
+                                                  onsubmit="return confirm('<?= $u['is_active'] ? 'Deactivate' : 'Reactivate' ?> this login?');">
                                                 <?= csrf_field() ?>
-                                                <input type="hidden" name="do" value="delete">
+                                                <input type="hidden" name="do" value="toggle_active">
                                                 <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
-                                                <button class="btn btn-danger" style="padding:.3rem .6rem;font-size:.78rem"><i class="bi bi-trash"></i></button>
+                                                <button class="btn btn-secondary" style="padding:.3rem .6rem;font-size:.78rem"
+                                                        title="<?= $u['is_active'] ? 'Deactivate' : 'Reactivate' ?>"
+                                                        aria-label="<?= $u['is_active'] ? 'Deactivate' : 'Reactivate' ?> <?= h($u['full_name']) ?>">
+                                                    <i class="bi bi-<?= $u['is_active'] ? 'slash-circle' : 'check-circle' ?>"></i>
+                                                </button>
                                             </form>
+                                            <button type="button" class="btn btn-danger" style="padding:.3rem .6rem;font-size:.78rem"
+                                                    title="Delete permanently"
+                                                    aria-label="Delete <?= h($u['full_name']) ?> permanently"
+                                                    data-del-id="<?= (int)$u['id'] ?>"
+                                                    data-del-username="<?= h($u['username']) ?>"
+                                                    data-del-name="<?= h($u['full_name']) ?>">
+                                                <i class="bi bi-trash3"></i>
+                                            </button>
                                         <?php endif; ?>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
                             </tbody>
                         </table>
+                    </div>
+
+                    <div class="dm-modal" id="delModal" hidden>
+                        <div class="dm-modal-box" role="dialog" aria-modal="true" aria-labelledby="delModalTitle">
+                            <div class="dm-modal-head">
+                                <h3 id="delModalTitle"><i class="bi bi-exclamation-triangle-fill"></i> Delete faculty account</h3>
+                                <button type="button" class="dm-modal-x" id="delCloseBtn" aria-label="Close">&times;</button>
+                            </div>
+                            <div class="dm-modal-body">
+                                <p>
+                                    This permanently deletes the login for <strong id="delModalName"></strong>.
+                                    Any student records, notices etc. they created are kept, just unattributed.
+                                    <strong>This cannot be undone.</strong>
+                                </p>
+                                <form method="post" action="faculty_manage.php" id="delForm">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="do" value="delete">
+                                    <input type="hidden" name="id" id="delFormId" value="">
+                                    <label for="delConfirm">Type <code id="delWordHint"></code> to confirm</label>
+                                    <input type="text" id="delConfirm" name="confirm_username" autocomplete="off">
+                                    <div class="dm-modal-actions">
+                                        <button type="button" class="btn-ghost" id="delCancelBtn">Cancel</button>
+                                        <button type="submit" class="btn-danger-solid" id="delSubmitBtn" disabled>
+                                            <i class="bi bi-trash3"></i> Delete permanently
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
                     </div>
                 <?php endif; ?>
             </div>
@@ -477,6 +614,47 @@ if ($action === 'edit' && $id > 0) {
             }
             role.addEventListener('change', sync);
             sync();
+        })();
+
+        (function () {
+            var modal = document.getElementById('delModal');
+            if (!modal) return;
+            var idField  = document.getElementById('delFormId');
+            var nameEl   = document.getElementById('delModalName');
+            var hint     = document.getElementById('delWordHint');
+            var confirm_ = document.getElementById('delConfirm');
+            var submit   = document.getElementById('delSubmitBtn');
+            var expected = '';
+
+            function evaluate() {
+                submit.disabled = confirm_.value.trim() !== expected;
+            }
+            function open(id, username, fullname) {
+                idField.value = id;
+                nameEl.textContent = fullname + ' (@' + username + ')';
+                hint.textContent = username;
+                expected = username;
+                confirm_.value = '';
+                modal.hidden = false;
+                evaluate();
+                confirm_.focus();
+                document.addEventListener('keydown', onKey);
+            }
+            function close() {
+                modal.hidden = true;
+                document.removeEventListener('keydown', onKey);
+            }
+            function onKey(e) { if (e.key === 'Escape') close(); }
+
+            document.querySelectorAll('[data-del-id]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    open(btn.getAttribute('data-del-id'), btn.getAttribute('data-del-username'), btn.getAttribute('data-del-name'));
+                });
+            });
+            document.getElementById('delCloseBtn').addEventListener('click', close);
+            document.getElementById('delCancelBtn').addEventListener('click', close);
+            modal.addEventListener('click', function (e) { if (e.target === modal) close(); });
+            confirm_.addEventListener('input', evaluate);
         })();
     </script>
 </body>

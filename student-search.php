@@ -162,8 +162,8 @@ function render_search_results_inner(array $c): void
                             </td>
                             <td>
                                 <div class="row-action-btns">
-                                    <a class="row-action-btn" title="View profile" href="student-profile.php?id=<?= (int)$r['id'] ?>"><i class="bi bi-eye"></i></a>
-                                    <a class="row-action-btn edit" title="Edit" href="student-profile.php?id=<?= (int)$r['id'] ?>#formMode"><i class="bi bi-pencil"></i></a>
+                                    <a class="row-action-btn" title="View profile" aria-label="View profile — <?= h($r['full_name']) ?>" href="student-profile.php?id=<?= (int)$r['id'] ?>"><i class="bi bi-eye"></i></a>
+                                    <a class="row-action-btn edit" title="Edit" aria-label="Edit — <?= h($r['full_name']) ?>" href="student-profile.php?id=<?= (int)$r['id'] ?>#formMode"><i class="bi bi-pencil"></i></a>
                                 </div>
                             </td>
                         </tr>
@@ -387,7 +387,7 @@ if (isset($_GET['gw_game']) && $_GET['gw_game'] !== '') {
                         <h4><?= h($me['full_name']) ?></h4>
                         <span><?= h($me['department_name'] ?? $me['role']) ?></span>
                     </div>
-                    <a href="admin/logout.php?_csrf=<?= h(csrf_token()) ?>" class="btn-logout" title="Logout"><i class="bi bi-box-arrow-right"></i></a>
+                    <a href="admin/logout.php?_csrf=<?= h(csrf_token()) ?>" class="btn-logout" title="Logout" aria-label="Logout"><i class="bi bi-box-arrow-right"></i></a>
                 </div>
             </div>
         </aside>

@@ -357,3 +357,74 @@ function dob_to_password(?string $dob_yyyymmdd): ?string
     $ts = strtotime($dob_yyyymmdd);
     return $ts ? date('dmY', $ts) : null;
 }
+
+/* =====================================================================
+ *  External Entries — link-based, passwordless student self-submission.
+ *  There is no password for this flow (see email_verify.php-style gate
+ *  in external_entry_verify.php): identity is "possession of a live
+ *  session created by verifying an email or clicking a resume-magic-link".
+ *  Sessions are independent from both faculty and student sessions.
+ *  Session keys are prefixed with `ext_` to avoid any collision.
+ * ===================================================================== */
+
+function external_student_session_keys(): array
+{
+    return ['ext_student_id', 'ext_link_id', 'ext_student_email', 'ext_student_name', 'ext_last_activity'];
+}
+
+function external_student_clear_session(): void
+{
+    foreach (external_student_session_keys() as $k) unset($_SESSION[$k]);
+}
+
+function external_student_alive(): bool
+{
+    if (empty($_SESSION['ext_student_id'])) return false;
+    $last = $_SESSION['ext_last_activity'] ?? 0;
+    if (time() - (int)$last > SESSION_IDLE_TIMEOUT) {
+        external_student_clear_session();
+        return false;
+    }
+    $_SESSION['ext_last_activity'] = time();
+    return true;
+}
+
+function current_external_student(): ?array
+{
+    if (!external_student_alive()) return null;
+    return [
+        'id'        => (int)$_SESSION['ext_student_id'],
+        'link_id'   => (int)$_SESSION['ext_link_id'],
+        'email'     => $_SESSION['ext_student_email'] ?? '',
+        'full_name' => $_SESSION['ext_student_name'] ?? '',
+    ];
+}
+
+/**
+ * $row must include: id, link_id, email, full_name.
+ */
+function external_student_login(array $row): void
+{
+    session_regenerate_id(true);
+    $_SESSION['ext_student_id']    = (int)$row['id'];
+    $_SESSION['ext_link_id']       = (int)$row['link_id'];
+    $_SESSION['ext_student_email'] = $row['email'];
+    $_SESSION['ext_student_name']  = $row['full_name'];
+    $_SESSION['ext_last_activity'] = time();
+    csrf_rotate();
+}
+
+function external_student_logout(): void
+{
+    external_student_clear_session();
+    // Mirror student_logout(): only destroy the whole session (and its cookie)
+    // when no other role is signed in on this browser.
+    if (!current_faculty() && !current_student()) {
+        $_SESSION = [];
+        if (ini_get('session.use_cookies')) {
+            $p = session_get_cookie_params();
+            setcookie(session_name(), '', time() - 42000, $p['path'], $p['domain'], $p['secure'], $p['httponly']);
+        }
+        session_destroy();
+    }
+}

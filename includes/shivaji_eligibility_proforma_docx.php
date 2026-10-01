@@ -7,6 +7,10 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/polytechnic_eligibility_docx.php';
 
+if (!defined('SHIVAJI_ELIGIBILITY_ROWS_PER_PAGE')) {
+    define('SHIVAJI_ELIGIBILITY_ROWS_PER_PAGE', 7);
+}
+
 function shivaji_docx_dob(?string $dob): string
 {
     if ($dob === null || $dob === '' || $dob === '0000-00-00') {
@@ -50,20 +54,26 @@ function shivaji_docx_class(?string $studyYear, ?string $durationYears = null): 
     return trim((string)$studyYear);
 }
 
-/** Roman-numeral year, used in the "Present Course" admission sub-column. */
-function shivaji_docx_roman(?string $studyYear, ?string $durationYears): string
+/**
+ * Which qualifying exam to print in the "Name of Exam" / "Date & Year"
+ * cells: whichever of HSC/Diploma the student passed most recently
+ * (the larger year). Falls back to whichever single one is filled, or
+ * to HSC (possibly with a blank year) when neither is filled.
+ */
+function shivaji_docx_qualifying_exam(array $participant): array
 {
-    $roman = [1 => 'I', 2 => 'II', 3 => 'III', 4 => 'IV', 5 => 'V', 6 => 'VI'];
-    $key = strtolower(trim((string)$studyYear));
-    $ordinalMap = ['first' => 1, 'second' => 2, 'third' => 3];
-    if (isset($ordinalMap[$key])) {
-        return $roman[$ordinalMap[$key]] ?? '';
+    $hscYear     = trim((string)($participant['hsc_passing_year'] ?? ''));
+    $diplomaYear = trim((string)($participant['diploma_passing_year'] ?? ''));
+
+    if ($hscYear !== '' && $diplomaYear !== '') {
+        return (int)$diplomaYear > (int)$hscYear
+            ? ['label' => 'Diploma', 'year' => $diplomaYear]
+            : ['label' => 'HSC', 'year' => $hscYear];
     }
-    if ($key === 'final') {
-        $dur = shivaji_docx_duration_number($durationYears);
-        return $dur !== null ? ($roman[$dur] ?? '') : '';
+    if ($diplomaYear !== '') {
+        return ['label' => 'Diploma', 'year' => $diplomaYear];
     }
-    return '';
+    return ['label' => 'HSC', 'year' => $hscYear];
 }
 
 /** Heuristic UG/PG split for a free-text Program value. */
@@ -192,7 +202,8 @@ function shivaji_docx_page(
     string $departmentCode,
     string $departmentName,
     array $participants,
-    int $startingNumber
+    int $startingNumber,
+    bool $includeCertification = true
 ): string {
     // Header university line depends on the department's affiliating university:
     //   management / architecture (pharm_faculty) -> Shivaji University only
@@ -369,8 +380,11 @@ function shivaji_docx_page(
         ],
     ];
 
-    for ($slot = 0; $slot < 7; $slot++) {
-        $participant = $participants[$slot] ?? [];
+    // Render exactly the students supplied for this page. Pagination is
+    // handled by build_shivaji_eligibility_proforma_docx(); keeping this
+    // loop data-driven prevents the old seven-player template from silently
+    // acting as a hard export limit.
+    foreach (array_values($participants) as $slot => $participant) {
         $program = trim((string)($participant['program'] ?? ''));
         $duration = trim((string)($participant['course_duration_years'] ?? ''));
         $studyYear = $participant['study_year'] ?? null;
@@ -386,16 +400,17 @@ function shivaji_docx_page(
         $faUniversity  = trim((string)($participant['first_admission_university_year'] ?? '')) ?: $admissionYear;
         $faCourse      = trim((string)($participant['first_admission_course_year'] ?? '')) ?: $admissionYear;
         $faClass       = trim((string)($participant['first_admission_class_year'] ?? '')) ?: $presentClassYear;
+        $exam          = $program !== '' ? shivaji_docx_qualifying_exam($participant) : ['label' => '', 'year' => ''];
 
-        $values = $participant === [] ? array_fill(0, 21, '') : [
+        $values = [
             (string)($startingNumber + $slot) . '.',
             trim((string)($participant['full_name'] ?? '')),
             trim((string)($participant['mother_name'] ?? '')),
             trim((string)($participant['enrollment_no'] ?? '')),
             trim((string)($participant['roll_no'] ?? '')),
             shivaji_docx_dob($participant['dob'] ?? null),
-            $program !== '' ? 'HSC' : '',
-            trim((string)($participant['hsc_passing_year'] ?? '')),
+            $exam['label'],
+            $exam['year'],
             shivaji_docx_class($studyYear, $duration),
             $program,
             $duration,
@@ -423,37 +438,39 @@ function shivaji_docx_page(
         $rows[] = $row;
     }
 
-    $content .= shivaji_docx_table(
-        $rows,
-        $gridWidths,
-        [0 => 1500, 1 => 760, 2 => 720, 3 => 720, 4 => 720, 5 => 720, 6 => 720, 7 => 720, 8 => 720]
-    );
+    $rowHeights = [0 => 1500, 1 => 760];
+    foreach ($participants as $slot => $_participant) {
+        $rowHeights[$slot + 2] = 720;
+    }
+    $content .= shivaji_docx_table($rows, $gridWidths, $rowHeights);
 
-    $content .= poly_docx_paragraph(
-        poly_docx_run('Certified that the above particulars are true as per records of the College', ['size' => 21]),
-        ['before' => 150, 'after' => 30]
-    );
-    $content .= poly_docx_paragraph(
-        poly_docx_run('Certified the above players are not employed on full time basis.', ['size' => 21]),
-        ['after' => 120]
-    );
+    if ($includeCertification) {
+        $content .= poly_docx_paragraph(
+            poly_docx_run('Certified that the above particulars are true as per records of the College', ['size' => 21]),
+            ['before' => 150, 'after' => 30]
+        );
+        $content .= poly_docx_paragraph(
+            poly_docx_run('Certified the above players are not employed on full time basis.', ['size' => 21]),
+            ['after' => 120]
+        );
 
-    $content .= poly_docx_table([[
-        poly_docx_paragraph(
-            poly_docx_run('Date: ______________', ['bold' => true, 'size' => 21]),
-            ['align' => 'left']
-        ) . shivaji_docx_seal(),
-        poly_docx_paragraph(
-            poly_docx_run('Director of Physical Education', ['bold' => true, 'size' => 21])
-            . poly_docx_run("\n\nSignature of the Director of Physical Education", ['size' => 21]),
-            ['align' => 'center']
-        ),
-        poly_docx_paragraph(
-            poly_docx_run('Principal', ['bold' => true, 'size' => 21])
-            . poly_docx_run("\n\nSignature of the Principal", ['size' => 21]),
-            ['align' => 'center']
-        ),
-    ]], [4400, 6500, 4700], ['row_heights' => [0 => 900]]);
+        $content .= poly_docx_table([[
+            poly_docx_paragraph(
+                poly_docx_run('Date: ______________', ['bold' => true, 'size' => 21]),
+                ['align' => 'left']
+            ) . shivaji_docx_seal(),
+            poly_docx_paragraph(
+                poly_docx_run('Director of Physical Education', ['bold' => true, 'size' => 21])
+                . poly_docx_run("\n\nSignature of the Director of Physical Education", ['size' => 21]),
+                ['align' => 'center']
+            ),
+            poly_docx_paragraph(
+                poly_docx_run('Principal', ['bold' => true, 'size' => 21])
+                . poly_docx_run("\n\nSignature of the Principal", ['size' => 21]),
+                ['align' => 'center']
+            ),
+        ]], [4400, 6500, 4700], ['row_heights' => [0 => 900]]);
+    }
 
     return $content;
 }
@@ -469,12 +486,13 @@ function build_shivaji_eligibility_proforma_docx(
     string $departmentName,
     array $participants
 ): string {
-    $pages = array_chunk($participants, 7);
+    $pages = array_chunk(array_values($participants), SHIVAJI_ELIGIBILITY_ROWS_PER_PAGE);
     if ($pages === []) {
         $pages = [[]];
     }
 
     $body = '';
+    $startingNumber = 1;
     foreach ($pages as $pageIndex => $pageRows) {
         if ($pageIndex > 0) {
             $body .= '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
@@ -486,8 +504,10 @@ function build_shivaji_eligibility_proforma_docx(
             $departmentCode,
             $departmentName,
             $pageRows,
-            ($pageIndex * 7) + 1
+            $startingNumber,
+            $pageIndex === count($pages) - 1
         );
+        $startingNumber += count($pageRows);
     }
 
     $document = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'

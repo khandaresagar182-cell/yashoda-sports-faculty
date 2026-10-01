@@ -140,7 +140,7 @@ $students = db_select(
     <div class="app-wrapper">
         <aside class="sidebar">
             <div class="sidebar-brand">
-                <img src="<?= h(url('images/ytc-logo.png')) ?>" alt="YTC Logo">
+                <img src="<?= h(url('images/ytc-logo.png')) ?>" alt="YTC Logo" width="42" height="42">
                 <div class="sidebar-brand-text">
                     <h2>Sports Database</h2>
                     <span>Yashoda Technical Campus</span>
@@ -162,10 +162,12 @@ $students = db_select(
                 <div class="sidebar-nav-label">Site Content</div>
                 <a href="notices_list.php"><i class="bi bi-megaphone"></i> <span>Notices</span></a>
                 <a href="achievements_list.php" class="active"><i class="bi bi-trophy"></i> <span>Achievements</span></a>
+                <a href="committee_manage.php"><i class="bi bi-people-fill"></i> <span>Committee</span></a>
                 <?php if ($me['role'] === 'SUPER_ADMIN'): ?>
                     <div class="sidebar-nav-label">Admin</div>
                     <a href="faculty_manage.php"><i class="bi bi-people-fill"></i> <span>Faculty Management</span></a>
                     <a href="document_requirements.php"><i class="bi bi-file-earmark-ruled"></i> <span>Document Requirements</span></a>
+                    <a href="sports_assign.php"><i class="bi bi-trophy-fill"></i> <span>Sports Assignment</span></a>
                 <?php endif; ?>
                 <div class="sidebar-nav-label">Site</div>
                 <a href="../index.php"><i class="bi bi-globe"></i> <span>View Website</span></a>
@@ -191,7 +193,7 @@ $students = db_select(
             </header>
 
             <div class="content-body">
-                <?php if ($err): ?><div class="alert-banner error"><i class="bi bi-exclamation-circle"></i> <?= h($err['msg']) ?></div><?php endif; ?>
+                <?php if ($err): ?><div class="alert-banner error" role="alert"><i class="bi bi-exclamation-circle"></i> <?= h($err['msg']) ?></div><?php endif; ?>
 
                 <div class="page-header">
                     <h1><?= $is_new ? 'Add Achievement' : 'Edit Achievement' ?></h1>
@@ -204,13 +206,13 @@ $students = db_select(
                     <div class="form-section">
                         <h3><i class="bi bi-trophy"></i> Achievement Details</h3>
                         <div class="form-group" style="margin-bottom:1rem">
-                            <label>Title <span class="req">*</span></label>
-                            <input type="text" name="title" required maxlength="200" value="<?= h($ach['title']) ?>" placeholder="e.g. State Level Basketball Championship 2025">
+                            <label for="title">Title <span class="req">*</span></label>
+                            <input type="text" id="title" name="title" required maxlength="200" value="<?= h($ach['title']) ?>" placeholder="e.g. State Level Basketball Championship 2025">
                         </div>
                         <div class="form-grid">
                             <div class="form-group">
-                                <label>Student</label>
-                                <select name="student_id">
+                                <label for="student_id">Student</label>
+                                <select id="student_id" name="student_id">
                                     <option value="">— None / Not student-specific —</option>
                                     <?php foreach ($students as $s): ?>
                                         <option value="<?= (int)$s['id'] ?>" <?= (int)$ach['student_id'] === (int)$s['id'] ? 'selected' : '' ?>>
@@ -221,17 +223,17 @@ $students = db_select(
                                 <span class="hint">Optional — for team events, leave blank and put team name in the title.</span>
                             </div>
                             <div class="form-group">
-                                <label>Event Date</label>
-                                <input type="date" name="event_date" value="<?= h($ach['event_date']) ?>">
+                                <label for="event_date">Event Date</label>
+                                <input type="date" id="event_date" name="event_date" value="<?= h($ach['event_date']) ?>">
                             </div>
                             <div class="form-group">
-                                <label>Event Name</label>
-                                <input type="text" name="event_name" maxlength="160" value="<?= h($ach['event_name']) ?>" placeholder="e.g. Inter-University Athletics Meet">
+                                <label for="event_name">Event Name</label>
+                                <input type="text" id="event_name" name="event_name" maxlength="160" value="<?= h($ach['event_name']) ?>" placeholder="e.g. Inter-University Athletics Meet">
                                 <span class="hint">Optional. Falls back to title if blank.</span>
                             </div>
                             <div class="form-group">
-                                <label>Level</label>
-                                <select name="level">
+                                <label for="level">Level</label>
+                                <select id="level" name="level">
                                     <option value="">— Select —</option>
                                     <?php foreach (['College','University','State','National','International'] as $lvl): ?>
                                         <option value="<?= h($lvl) ?>" <?= $ach['level'] === $lvl ? 'selected' : '' ?>><?= h($lvl) ?></option>
@@ -239,14 +241,14 @@ $students = db_select(
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label>Position / Medal</label>
-                                <input type="text" name="position" maxlength="40" value="<?= h($ach['position']) ?>" placeholder="e.g. Gold, Silver, Bronze, 1st, Runner-up">
+                                <label for="position">Position / Medal</label>
+                                <input type="text" id="position" name="position" maxlength="40" value="<?= h($ach['position']) ?>" placeholder="e.g. Gold, Silver, Bronze, 1st, Runner-up">
                                 <span class="hint">Drives the medal badge color (Gold/Silver/Bronze).</span>
                             </div>
                         </div>
                         <div class="form-group" style="margin-top:1rem">
-                            <label>Description</label>
-                            <textarea name="description" rows="4" placeholder="Short description shown in the carousel overlay…"><?= h($ach['description']) ?></textarea>
+                            <label for="description">Description</label>
+                            <textarea id="description" name="description" rows="4" placeholder="Short description shown in the carousel overlay…"><?= h($ach['description']) ?></textarea>
                         </div>
                     </div>
 
@@ -264,7 +266,7 @@ $students = db_select(
                             </div>
                         <?php endif; ?>
                         <div class="form-group">
-                            <label><?= !empty($ach['image_path']) ? 'Replace Image (optional)' : 'Upload Image (optional)' ?></label>
+                            <label for="achievementImageInput"><?= !empty($ach['image_path']) ? 'Replace Image (optional)' : 'Upload Image (optional)' ?></label>
                             <input type="file" name="image" id="achievementImageInput" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp">
                             <span class="hint">Max 5 MB. JPG / PNG / WebP. The complete image is fitted into the public carousel frame without stretching.</span>
                         </div>

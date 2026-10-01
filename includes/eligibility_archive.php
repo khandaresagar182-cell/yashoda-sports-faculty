@@ -109,7 +109,8 @@ function eligibility_archive_store(
     string $eventLabel,
     string $docxBinary,
     int $playerCount,
-    ?int $facultyId
+    ?int $facultyId,
+    bool $isExternal = false
 ): void {
     try {
         if ($departmentId <= 0 || $docxBinary === '') {
@@ -118,7 +119,7 @@ function eligibility_archive_store(
 
         $deptSlug = eligibility_archive_slug($departmentCode, 'dept_' . $departmentId);
         $yearSlug = eligibility_archive_year_slug($academicYear);
-        $dir      = ELIGIBILITY_ARCHIVE_ROOT . '/' . $deptSlug . '/' . $yearSlug;
+        $dir      = ELIGIBILITY_ARCHIVE_ROOT . '/' . $deptSlug . ($isExternal ? '/external' : '') . '/' . $yearSlug;
 
         if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
             error_log('[eligibility_archive] mkdir failed: ' . $dir);
@@ -142,15 +143,16 @@ function eligibility_archive_store(
             return;
         }
 
-        $relPath = 'uploads/eligibility_archive/' . $deptSlug . '/' . $yearSlug . '/' . $fileName;
+        $relPath = 'uploads/eligibility_archive/' . $deptSlug . ($isExternal ? '/external' : '') . '/' . $yearSlug . '/' . $fileName;
 
         db_insert(
             'INSERT INTO eligibility_archive
-                (department_id, academic_year, game_name, gender, event_label,
+                (department_id, is_external, academic_year, game_name, gender, event_label,
                  file_name, file_path, player_count, created_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
                 $departmentId,
+                $isExternal ? 1 : 0,
                 preg_match('/^\d{4}-\d{2}$/', trim($academicYear)) ? trim($academicYear) : '',
                 mb_substr($game, 0, 80),
                 $gender !== '' ? mb_substr($gender, 0, 10) : null,
@@ -160,7 +162,7 @@ function eligibility_archive_store(
                 max(0, $playerCount),
                 $facultyId && $facultyId > 0 ? $facultyId : null,
             ],
-            'issssssii'
+            'iissssssii'
         );
     } catch (\Throwable $e) {
         error_log('[eligibility_archive] store failed: ' . $e->getMessage());
@@ -171,7 +173,7 @@ function eligibility_archive_store(
  * Year folders for one department: [{academic_year, n, last_at}], newest first.
  * @return array<int,array<string,mixed>>
  */
-function eligibility_archive_years(int $departmentId): array
+function eligibility_archive_years(int $departmentId, bool $isExternal = false): array
 {
     if ($departmentId <= 0) return [];
     return db_select(
@@ -179,10 +181,10 @@ function eligibility_archive_years(int $departmentId): array
                 COUNT(*)        AS n,
                 MAX(created_at) AS last_at
            FROM eligibility_archive
-          WHERE department_id = ?
+          WHERE department_id = ? AND is_external = ?
           GROUP BY academic_year
           ORDER BY (academic_year = '') ASC, academic_year DESC",
-        [$departmentId], 'i'
+        [$departmentId, $isExternal ? 1 : 0], 'ii'
     );
 }
 
@@ -190,7 +192,7 @@ function eligibility_archive_years(int $departmentId): array
  * Files in one department's year folder, newest first.
  * @return array<int,array<string,mixed>>
  */
-function eligibility_archive_files(int $departmentId, string $academicYear): array
+function eligibility_archive_files(int $departmentId, string $academicYear, bool $isExternal = false): array
 {
     if ($departmentId <= 0) return [];
     $ay = preg_match('/^\d{4}-\d{2}$/', trim($academicYear)) ? trim($academicYear) : '';
@@ -198,9 +200,9 @@ function eligibility_archive_files(int $departmentId, string $academicYear): arr
         'SELECT id, academic_year, game_name, gender, event_label,
                 file_name, file_path, player_count, created_at
            FROM eligibility_archive
-          WHERE department_id = ? AND academic_year = ?
+          WHERE department_id = ? AND academic_year = ? AND is_external = ?
           ORDER BY created_at DESC, id DESC',
-        [$departmentId, $ay], 'is'
+        [$departmentId, $ay, $isExternal ? 1 : 0], 'isi'
     );
 }
 
@@ -211,7 +213,7 @@ function eligibility_archive_row(int $id, ?int $departmentId): ?array
 {
     if ($id <= 0 || !$departmentId || $departmentId <= 0) return null;
     return db_one(
-        'SELECT id, department_id, academic_year, game_name, gender, event_label,
+        'SELECT id, department_id, is_external, academic_year, game_name, gender, event_label,
                 file_name, file_path, player_count, created_at
            FROM eligibility_archive
           WHERE id = ? AND department_id = ?',

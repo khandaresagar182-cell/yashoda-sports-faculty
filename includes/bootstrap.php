@@ -8,14 +8,23 @@
 declare(strict_types=1);
 
 /* ---------------- configuration & DB ---------------- */
-// db.php defines DB_* and APP_ENV constants used by the rest of bootstrap.
-require_once __DIR__ . '/db.php';
 
 /**
  * Load config.local.php if present, and mirror its values into both
  * getenv() (via putenv) and $_SERVER so the rest of the codebase can
- * read them with either API. This is the bridge needed on hosts (GoDaddy
- * shared cPanel) that block env[] in .user.ini / MultiPHP INI Editor.
+ * read them with either API. This is the bridge needed on hosts (GoDaddy,
+ * Namecheap shared cPanel) that block env[] in .user.ini / MultiPHP INI
+ * Editor.
+ *
+ * MUST run before db.php is required below: db.php reads getenv('APP_ENV')
+ * and permanently define()s the APP_ENV constant the moment it loads. If
+ * this bridge ran after that require, config.local.php's APP_ENV value
+ * would arrive too late — the constant is already locked to the 'local'
+ * default (PHP constants can't be redefined), silently forcing every
+ * APP_ENV === 'local' check in the app (display_errors, CSRF error detail,
+ * the register/verify dev-link fallback, ...) to behave as local even in
+ * production. See memory: project-bootstrap-app-env-bug for the earlier,
+ * related ordering bug this codebase already hit once.
  *
  * The file is .gitignored. See includes/config.local.example.php for shape.
  */
@@ -39,6 +48,10 @@ if (is_file($localCfgPath)) {
         }
     }
 }
+
+// db.php defines DB_* and APP_ENV constants used by the rest of bootstrap —
+// must come after the config.local.php bridge above.
+require_once __DIR__ . '/db.php';
 
 /* ---------------- site URL ---------------- */
 // Trusted public base URL used to build absolute links in emails, password
@@ -105,10 +118,10 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/helpers.php';
 require_once __DIR__ . '/csrf.php';
 require_once __DIR__ . '/auth.php';
-require_once __DIR__ . '/jersey.php';
 require_once __DIR__ . '/upload.php';
 require_once __DIR__ . '/mailer.php';
 require_once __DIR__ . '/student_rendering.php';
+require_once __DIR__ . '/external_entry_helpers.php';
 require_once __DIR__ . '/seed_check.php';
 require_once __DIR__ . '/mobile_sidebar.php';
 
@@ -126,9 +139,9 @@ $is_staff_area = (strpos($req_uri, '/admin/') !== false)
               || (strpos($req_uri, '/student-search.php') !== false);
 
 if ($is_staff_area) {
-    // Mobile sidebar: 10 admin pages (faculty_manage, notices_list,
+    // Mobile sidebar: several admin pages (faculty_manage, notices_list,
     // notice_edit, achievements_list, achievement_edit, provisional_list,
-    // final_list, jersey_dashboard, jersey_manage, student_list) lack a
+    // final_list, jersey_dashboard, student_list, ...) lack a
     // toggle button / overlay / JS handler. The injector adds those
     // pieces on the fly. Pages that already have a working pattern
     // (dashboard.php, faculty-select.php, student-profile.php,

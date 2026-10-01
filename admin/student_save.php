@@ -53,9 +53,11 @@ if ($full_name === '')      $missing[] = 'Full Name';
 if ($dept_id <= 0)          $missing[] = 'Faculty';
 if ($email_raw === '')      $missing[] = 'Email';
 if ($mobile_raw === '')     $missing[] = 'Mobile No';
-    $address_raw = trim((string)($_POST['address'] ?? ''));
-    if ($address_raw === '')     $missing[] = 'Address';
-    if (strlen($address_raw) > 500) $missing[] = 'Address (max 500 characters)';
+    $permanent_address_raw = trim((string)($_POST['permanent_address'] ?? ''));
+    $current_address_raw   = trim((string)($_POST['current_address'] ?? ''));
+    if ($permanent_address_raw === '')     $missing[] = 'Permanent Address';
+    if (strlen($permanent_address_raw) > 500) $missing[] = 'Permanent Address (max 500 characters)';
+    if (strlen($current_address_raw) > 500)   $missing[] = 'Current Address (max 500 characters)';
 if ($dob_raw === '')        $missing[] = 'Date of Birth';
 if ($study_year_raw === '') $missing[] = 'Year of Study';
 if ($uses_father_first_name && $father_name_raw === '') $missing[] = "Father's First Name";
@@ -137,11 +139,35 @@ $data = [
     'blood_group'   => in_array($_POST['blood_group'] ?? '', blood_options(), true) ? $_POST['blood_group'] : null,
     'email'         => trim((string)($_POST['email'] ?? '')) ?: null,
     'mobile'        => trim((string)($_POST['mobile'] ?? '')) ?: null,
-    'address'       => $address_raw ?: null,
+    'whatsapp_no'   => trim((string)($_POST['whatsapp_no'] ?? '')) ?: null,
+    // Legacy single-field column, kept in sync with permanent_address so
+    // older admin lists/exports that still read `address` don't go stale —
+    // same convention student_dashboard_process.php uses for the wizard.
+    'address'            => $permanent_address_raw ?: null,
+    'permanent_address'  => $permanent_address_raw ?: null,
+    'current_address'    => $current_address_raw ?: null,
+    'bank_account_number' => trim((string)($_POST['bank_account_number'] ?? '')) ?: null,
+    'bank_name'           => trim((string)($_POST['bank_name'] ?? '')) ?: null,
+    'bank_branch'         => trim((string)($_POST['bank_branch'] ?? '')) ?: null,
+    'bank_ifsc'           => trim((string)($_POST['bank_ifsc'] ?? '')) ?: null,
+    'jersey_number'       => trim((string)($_POST['jersey_number'] ?? '')) ?: null,
+    'jersey_size'         => in_array($_POST['jersey_size'] ?? '', array_keys(jersey_size_options()), true) ? $_POST['jersey_size'] : null,
+    'shorts_size'         => in_array($_POST['shorts_size'] ?? '', array_keys(shorts_size_options()), true) ? $_POST['shorts_size'] : null,
+    'track_size'          => in_array($_POST['track_size'] ?? '', array_keys(shorts_size_options()), true) ? $_POST['track_size'] : null,
     'department_id' => $dept_id,
     'program'       => trim((string)($_POST['program'] ?? '')) ?: null,
+    'department_name' => trim((string)($_POST['department_name'] ?? '')) ?: null,
+    'course_duration_years' => trim((string)($_POST['course_duration_years'] ?? '')) ?: null,
     'academic_year' => trim((string)($_POST['academic_year'] ?? '')) ?: null,
     'study_year'    => $study_year_raw,
+    'ssc_passing_year' => trim((string)($_POST['ssc_passing_year'] ?? '')) ?: null,
+    'hsc_passing_year' => trim((string)($_POST['hsc_passing_year'] ?? '')) ?: null,
+    'diploma_passing_year' => trim((string)($_POST['diploma_passing_year'] ?? '')) ?: null,
+    'first_admission_university_year' => trim((string)($_POST['first_admission_university_year'] ?? '')) ?: null,
+    'first_admission_course_year'     => trim((string)($_POST['first_admission_course_year'] ?? '')) ?: null,
+    'first_admission_class_year'      => trim((string)($_POST['first_admission_class_year'] ?? '')) ?: null,
+    'has_gap_year'  => in_array((string)($_POST['has_gap_year'] ?? ''), ['0', '1'], true) ? (int)$_POST['has_gap_year'] : null,
+    'gap_year_detail' => ((string)($_POST['has_gap_year'] ?? '') === '1') ? (trim((string)($_POST['gap_year_detail'] ?? '')) ?: null) : null,
     'sport_1'       => trim((string)($_POST['sport_1'] ?? '')) ?: null,
     'sport_2'       => trim((string)($_POST['sport_2'] ?? '')) ?: null,
     'achievements'  => trim((string)($_POST['achievements'] ?? '')) ?: null,
@@ -170,7 +196,13 @@ if ($id > 0) {
 
     $sql = 'UPDATE students SET
         enrollment_no=?, roll_no=?, full_name=?, mother_name=?, father_name=?, dob=?, aadhar_number=?, gender=?, blood_group=?, email=?, mobile=?,
-        address=?, department_id=?, program=?, academic_year=?, study_year=?,
+        whatsapp_no=?, address=?, permanent_address=?, current_address=?,
+        bank_account_number=?, bank_name=?, bank_branch=?, bank_ifsc=?,
+        jersey_number=?, jersey_size=?, shorts_size=?, track_size=?,
+        department_id=?, program=?, department_name=?, course_duration_years=?, academic_year=?, study_year=?,
+        ssc_passing_year=?, hsc_passing_year=?, diploma_passing_year=?,
+        first_admission_university_year=?, first_admission_course_year=?, first_admission_class_year=?,
+        has_gap_year=?, gap_year_detail=?,
         sport_1=?, sport_2=?, achievements=?, has_played_in_college=?,
         zonal_played=?, zonal_year=?, interzonal_played=?, interzonal_year=?,
         all_india_played=?, all_india_year=?,
@@ -221,14 +253,20 @@ if ($id > 0) {
 
     $sql = 'INSERT INTO students
         (enrollment_no, roll_no, full_name, mother_name, father_name, dob, aadhar_number, gender, blood_group, email, mobile,
-         address, department_id, program, academic_year, study_year,
+         whatsapp_no, address, permanent_address, current_address,
+         bank_account_number, bank_name, bank_branch, bank_ifsc,
+         jersey_number, jersey_size, shorts_size, track_size,
+         department_id, program, department_name, course_duration_years, academic_year, study_year,
+         ssc_passing_year, hsc_passing_year, diploma_passing_year,
+         first_admission_university_year, first_admission_course_year, first_admission_class_year,
+         has_gap_year, gap_year_detail,
          sport_1, sport_2, achievements, has_played_in_college,
          zonal_played, zonal_year, interzonal_played, interzonal_year,
          all_india_played, all_india_year,
          west_zone_played, west_zone_year,
          krida_mahotsav_played, krida_mahotsav_year,
          photo_path, password_hash, created_by)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
     // Get the newly inserted student ID
     $me = current_faculty();
     $params = array_values($data);

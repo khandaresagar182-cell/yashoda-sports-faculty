@@ -1,78 +1,96 @@
 <?php
 /**
- * Jersey Kit overview for all authenticated faculty and administrators.
+ * Jersey Kit — simple lookup of a student's stored jersey number/size.
+ *
+ * Replaces the old link/QR/approval workflow (jersey_forms, jersey_requests,
+ * public jersey-form.php). Jersey number + size are now plain fields on the
+ * student's own record (filled in during the wizard, Step 6), so this page
+ * is just a search: pick a sport and/or type a name, see the results.
+ *
+ * Scoped like every other faculty page: FACULTY see their own department,
+ * SUPER_ADMIN picks one via ?dept=.
  */
 
 declare(strict_types=1);
 
 require_once __DIR__ . '/../includes/bootstrap.php';
+require_once __DIR__ . '/../includes/student_rendering.php';
 
 require_login();
 require_department();
 
-$me = current_faculty();
-if ($me === null) {
-    redirect('../faculty-login.php');
-    exit;
+$me     = current_faculty();
+$deptId = effective_department_id();
+
+$gameCode = trim((string)($_GET['game'] ?? ''));
+$q        = trim((string)($_GET['q'] ?? ''));
+$page     = max(1, (int)($_GET['page'] ?? 1));
+$per      = 50;
+
+$catalog = [];
+$rows    = [];
+$total   = 0;
+$pages   = 1;
+if ($deptId !== null && $deptId > 0) {
+    $catalog = db_select(
+        'SELECT game_code, display_name
+           FROM dept_game_catalog
+          WHERE department_id = ? AND is_active = 1
+          ORDER BY display_name',
+        [$deptId], 'i'
+    );
+
+    // Only accept a game code that's actually in this department's catalog.
+    $validGame = null;
+    foreach ($catalog as $c) {
+        if ((string)$c['game_code'] === $gameCode) { $validGame = $gameCode; break; }
+    }
+
+    $where  = 's.department_id = ? AND s.form_submitted_at IS NOT NULL';
+    $params = [$deptId];
+    $types  = 'i';
+
+    if ($validGame !== null) {
+        $where   .= ' AND EXISTS (SELECT 1 FROM student_selected_games ssg WHERE ssg.student_id = s.id AND ssg.game_code = ?)';
+        $params[] = $validGame;
+        $types   .= 's';
+    }
+    if ($q !== '') {
+        $where   .= ' AND (s.full_name LIKE ? OR s.enrollment_no LIKE ?)';
+        $like     = '%' . $q . '%';
+        $params[] = $like;
+        $params[] = $like;
+        $types   .= 'ss';
+    }
+
+    $total = (int)(db_one("SELECT COUNT(*) AS n FROM students s WHERE $where", $params, $types)['n'] ?? 0);
+    $pages = max(1, (int)ceil($total / $per));
+    if ($page > $pages) $page = $pages;
+    $offset = ($page - 1) * $per;
+
+    $rows = db_select(
+        "SELECT s.id, s.full_name, s.enrollment_no, s.gender, s.department_id,
+                s.sport_1, s.sport_2, s.jersey_number, s.jersey_size, s.shorts_size, s.track_size
+           FROM students s
+          WHERE $where
+          ORDER BY s.full_name
+          LIMIT $per OFFSET $offset",
+        $params, $types
+    );
 }
 
-[$scope, $params, $types] = scope_sql_department('s');
-// Hide wizard drafts (students who registered but haven't hit Final Submit).
-$visible = faculty_visible_student_filter('s');
-$scope  .= $visible[0];
-$params  = array_merge($params, $visible[1]);
-$types  .= $visible[2];
-$dept_id = jersey_request_department_id();
-$jersey_dept_join   = jersey_forms_has_department_id() ? ' AND jf.department_id = s.department_id' : '';
-$jersey_gender_join = jersey_forms_has_gender() ? ' AND jf.gender <=> ft.gender' : '';
-
-$teams = db_select(
-    "SELECT ft.game_name, ft.event_label, ft.academic_year, ft.gender,
-            COUNT(DISTINCT ft.student_id) AS player_count,
-            jf.id AS form_id,
-            COALESCE(jf.is_open, 0) AS is_open,
-            COUNT(DISTINCT jr.id) AS request_count,
-            COUNT(DISTINCT CASE WHEN jr.status = 'Pending' THEN jr.id END) AS pending_count,
-            COUNT(DISTINCT CASE WHEN jr.status = 'Approved' THEN jr.id END) AS approved_count,
-            COUNT(DISTINCT CASE WHEN jr.status = 'Rejected' THEN jr.id END) AS rejected_count,
-            MAX(ft.created_at) AS last_added
-       FROM final_teams ft
-       JOIN students s ON s.id = ft.student_id
-       LEFT JOIN jersey_forms jf
-         ON jf.game_name = ft.game_name
-        AND jf.event_label = ft.event_label
-        AND jf.academic_year <=> ft.academic_year
-        $jersey_dept_join
-        $jersey_gender_join
-       LEFT JOIN jersey_requests jr
-         ON jr.jersey_form_id = jf.id
-        AND jr.student_id = s.id
-      WHERE 1=1 $scope
-      GROUP BY ft.game_name, ft.event_label, ft.academic_year, ft.gender, jf.id, jf.is_open
-      ORDER BY last_added DESC, ft.game_name, ft.event_label",
-    $params,
-    $types
-);
-
-$summary = [
-    'teams' => count($teams),
-    'open' => 0,
-    'requests' => 0,
-    'pending' => 0,
-];
-
-foreach ($teams as $team) {
-    $summary['open'] += (int)$team['is_open'];
-    $summary['requests'] += (int)$team['request_count'];
-    $summary['pending'] += (int)$team['pending_count'];
-}
+$pickerDeptIds  = load_picker_dept_ids();
+$gamesByStudent = $rows ? load_games_by_student(array_map(static fn($r) => (int)$r['id'], $rows)) : [];
+$sizeLabels     = jersey_size_options();
+$shortsLabels   = shorts_size_options();
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jersey Kit Dashboard | Sports Portal</title>
+    <title>Jersey Kit | Sports Portal</title>
+    <?= csrf_meta() ?>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
@@ -83,227 +101,238 @@ foreach ($teams as $team) {
         *{margin:0;padding:0;box-sizing:border-box}html,body{height:100%;overflow:hidden}
         body{font-family:var(--font-primary);color:var(--text-dark);background:var(--off-white);line-height:1.6}
         .app-wrapper{display:flex;height:100vh}
-        .sidebar{width:var(--sidebar-width);background:linear-gradient(180deg,var(--primary-navy-dark),var(--primary-navy));color:var(--white);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden}
+        .sidebar{width:var(--sidebar-width);background:linear-gradient(180deg,var(--primary-navy-dark),var(--primary-navy));color:#fff;display:flex;flex-direction:column;flex-shrink:0;overflow:hidden}
         .sidebar-brand{padding:1.25rem;border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:.75rem}
         .sidebar-brand img{width:42px;height:42px;border-radius:8px;object-fit:contain;background:rgba(255,255,255,.1);padding:3px}
-        .sidebar-brand-text h2{font-size:.85rem;font-weight:700;color:var(--white);margin:0}
+        .sidebar-brand-text h2{font-size:.85rem;font-weight:700;color:#fff;margin:0}
         .sidebar-brand-text span{font-size:.7rem;color:rgba(255,255,255,.5)}
         .sidebar-nav{flex:1;padding:1rem 0;overflow-y:auto}
         .sidebar-nav-label{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,.35);padding:.75rem 1.5rem .4rem}
         .sidebar-nav a{display:flex;align-items:center;gap:.75rem;padding:.7rem 1.5rem;color:rgba(255,255,255,.65);font-size:.88rem;font-weight:500;text-decoration:none;transition:var(--transition-smooth);border-left:3px solid transparent}
-        .sidebar-nav a:hover{color:var(--white);background:rgba(255,255,255,.06);border-left-color:rgba(201,162,39,.4)}
-        .sidebar-nav a.active{color:var(--white);background:rgba(201,162,39,.12);border-left-color:var(--accent-gold)}
-        .sidebar-nav a.active i{color:var(--accent-gold)}
+        .sidebar-nav a:hover{color:#fff;background:rgba(255,255,255,.06);border-left-color:rgba(201,162,39,.4)}
+        .sidebar-nav a.active{color:#fff;background:rgba(201,162,39,.12);border-left-color:var(--accent-gold)}
         .sidebar-nav a i{font-size:1.15rem;width:22px;text-align:center}
         .sidebar-footer{padding:1rem 1.25rem;border-top:1px solid rgba(255,255,255,.08)}
         .sidebar-user{display:flex;align-items:center;gap:.75rem}
-        .sidebar-user-avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--accent-gold),var(--accent-maroon));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem;color:var(--white);flex-shrink:0}
-        .sidebar-user-info h4{font-size:.82rem;font-weight:600;color:var(--white);margin:0}
+        .sidebar-user-avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--accent-gold),var(--accent-maroon));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem;color:#fff;flex-shrink:0}
+        .sidebar-user-info h4{font-size:.82rem;font-weight:600;color:#fff;margin:0}
         .sidebar-user-info span{font-size:.7rem;color:rgba(255,255,255,.5)}
-        .btn-logout{margin-left:auto;background:transparent;border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.6);padding:.35rem .5rem;border-radius:6px;text-decoration:none}
+        .btn-logout{margin-left:auto;background:0 0;border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.6);padding:.35rem .5rem;border-radius:6px;cursor:pointer;font-size:.85rem;text-decoration:none}
+        .btn-logout:hover{background:rgba(220,53,69,.2);border-color:rgba(220,53,69,.4);color:#ff8a8a}
         .main-content{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
-        .top-bar{background:var(--white);border-bottom:1px solid var(--light-gray);padding:.75rem 2rem;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
-        .top-bar h2{font-size:1rem;font-weight:600;color:var(--primary-navy);margin:0}
+        .top-bar{background:#fff;border-bottom:1px solid var(--light-gray);padding:.75rem 2rem;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
         .content-body{flex:1;overflow-y:auto;padding:2rem}
-        .page-header{margin-bottom:1.5rem}
-        .page-header h1{font-size:1.5rem;font-weight:700;color:var(--primary-navy);margin:0}
-        .page-header p{color:var(--medium-gray);font-size:.92rem;margin:.25rem 0 0}
-        .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;margin-bottom:1.5rem}
-        .stat-card{background:var(--white);border:1px solid var(--light-gray);border-radius:10px;padding:1rem 1.15rem;display:flex;align-items:center;gap:.85rem}
-        .stat-icon{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;background:rgba(26,54,93,.09);color:var(--primary-navy)}
-        .stat-card:nth-child(2) .stat-icon{background:rgba(25,135,84,.1);color:#157347}
-        .stat-card:nth-child(3) .stat-icon{background:rgba(201,162,39,.15);color:#8a6d08}
-        .stat-card:nth-child(4) .stat-icon{background:rgba(255,193,7,.14);color:#664d03}
-        .stat-info h3{font-size:1.35rem;font-weight:700;color:var(--primary-navy);margin:0;line-height:1.1}
-        .stat-info p{font-size:.72rem;color:var(--medium-gray);margin:0;text-transform:uppercase;letter-spacing:.4px}
-        .data-card{background:var(--white);border:1px solid var(--light-gray);border-radius:10px;overflow:hidden}
-        .data-card-header{padding:1rem 1.25rem;border-bottom:1px solid var(--light-gray);display:flex;align-items:center;justify-content:space-between;gap:1rem}
-        .data-card-header h2{font-size:1rem;font-weight:600;color:var(--primary-navy);margin:0}
+        .page-header{margin-bottom:1.25rem}
+        .page-header h1{font-size:1.4rem;font-weight:700;color:var(--primary-navy)}
+        .page-header p{color:var(--medium-gray);font-size:.9rem;margin-top:.25rem}
+        .toolbar{display:flex;align-items:flex-end;gap:1rem;flex-wrap:wrap;margin-bottom:1.25rem;background:#fff;border:1px solid var(--light-gray);border-radius:10px;padding:1.1rem 1.25rem}
+        .form-group{display:flex;flex-direction:column;gap:.3rem}
+        .form-group label{font-size:.78rem;font-weight:600;color:var(--primary-navy);text-transform:uppercase;letter-spacing:.3px}
+        .form-group input,.form-group select{padding:.55rem .75rem;border:1px solid var(--light-gray);border-radius:6px;font-family:inherit;font-size:.92rem;background:#fff;min-width:200px}
+        .form-group input:focus,.form-group select:focus{outline:none;border-color:var(--primary-navy)}
+        .btn{padding:.55rem 1.1rem;border-radius:6px;font-size:.88rem;font-weight:600;cursor:pointer;border:none;text-decoration:none;display:inline-flex;align-items:center;gap:.4rem}
+        .btn-primary{background:var(--primary-navy);color:#fff}.btn-primary:hover{background:var(--primary-navy-dark)}
+        .btn-secondary{background:var(--off-white);color:var(--primary-navy);border:1px solid var(--light-gray)}.btn-secondary:hover{background:var(--light-gray)}
+        .btn-sm{padding:.35rem .7rem;font-size:.8rem}
+        .data-card{background:#fff;border:1px solid var(--light-gray);border-radius:10px;overflow:hidden}
         .data-table{width:100%;border-collapse:collapse}
-        .data-table th{background:var(--off-white);padding:.7rem 1rem;font-size:.72rem;font-weight:700;color:var(--primary-navy);text-transform:uppercase;letter-spacing:.45px;text-align:left;border-bottom:1px solid var(--light-gray);white-space:nowrap}
-        .data-table td{padding:.8rem 1rem;font-size:.86rem;border-bottom:1px solid var(--light-gray);vertical-align:middle}
+        .data-table th{background:var(--off-white);padding:.75rem 1rem;font-size:.75rem;font-weight:700;color:var(--primary-navy);text-transform:uppercase;letter-spacing:.5px;text-align:left;border-bottom:1px solid var(--light-gray)}
+        .data-table td{padding:.75rem 1rem;font-size:.88rem;border-bottom:1px solid var(--light-gray);color:var(--text-dark);vertical-align:middle}
         .data-table tr:last-child td{border-bottom:none}
-        .team-name{font-weight:650;color:var(--primary-navy)}
-        .team-meta{font-size:.75rem;color:var(--medium-gray)}
-        .status-badge{display:inline-flex;align-items:center;gap:.3rem;padding:.2rem .55rem;border-radius:4px;font-size:.7rem;font-weight:700;text-transform:uppercase}
-        .status-open{background:rgba(25,135,84,.1);color:#0a3622}
-        .status-closed{background:rgba(220,53,69,.1);color:#842029}
-        .status-none{background:rgba(108,117,125,.1);color:var(--medium-gray)}
-        .request-counts{display:flex;gap:.35rem;flex-wrap:wrap}
-        .count-pill{padding:.16rem .45rem;border-radius:4px;font-size:.7rem;font-weight:650;background:var(--off-white);color:var(--medium-gray);border:1px solid var(--light-gray)}
-        .count-pill.pending{color:#664d03}.count-pill.approved{color:#0a3622}.count-pill.rejected{color:#842029}
-        .btn-manage{background:var(--primary-navy);color:#fff;padding:.38rem .7rem;border-radius:6px;font-size:.78rem;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:.35rem;white-space:nowrap}
-        .btn-manage:hover{background:var(--primary-navy-dark);color:#fff}
+        .data-table tr:hover{background:var(--off-white)}
+        .pagination{padding:1rem 1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;border-top:1px solid var(--light-gray)}
+        .pagination .info{font-size:.85rem;color:var(--medium-gray)}
+        .pagination .pages{display:flex;gap:.25rem}
+        .pagination .pages a{padding:.35rem .65rem;border:1px solid var(--light-gray);border-radius:4px;font-size:.85rem;color:var(--primary-navy);text-decoration:none;background:var(--white)}
+        .pagination .pages a:hover{background:var(--off-white)}
+        .pagination .pages a.active{background:var(--primary-navy);color:var(--white);border-color:var(--primary-navy)}
+        .pagination .pages a.disabled{opacity:.4;pointer-events:none}
+        .sport-tag{display:inline-block;background:rgba(201,162,39,.12);color:#9c7a12;padding:.2rem .6rem;border-radius:4px;font-size:.72rem;font-weight:600;margin-right:.3rem}
+        .jersey-chip{display:inline-flex;align-items:center;gap:.3rem;background:rgba(26,54,93,.08);color:var(--primary-navy);padding:.2rem .6rem;border-radius:50px;font-size:.82rem;font-weight:700}
+        .missing{color:var(--medium-gray);font-style:italic;font-size:.85rem}
         .empty-row{text-align:center;color:var(--medium-gray);padding:3rem 1rem;font-size:.9rem}
-        .empty-row i{font-size:2.4rem;display:block;margin-bottom:.5rem;color:var(--light-gray)}
+        .empty-row i{font-size:2.5rem;display:block;margin-bottom:.5rem;color:var(--light-gray)}
         @media(max-width:992px){
             .sidebar{position:fixed;left:-280px;top:0;height:100vh;transition:left .3s ease;z-index:1050}
             .sidebar.open{left:0}
             .top-bar{padding:.75rem 1.25rem}
             .content-body{padding:1.25rem}
-            .stat-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
-            .data-card { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-            .data-table { min-width: 600px; }
-        }
-        @media(max-width:576px){
-            .content-body { padding: 1rem 0.75rem; }
-            .stat-grid { gap: 0.75rem; }
-            .stat-card { padding: 0.85rem 1rem; }
-            .data-card-header { padding: 0.75rem 1rem; }
+            .toolbar{flex-direction:column;align-items:stretch}
+            .form-group input,.form-group select{min-width:0}
+            .data-card{overflow-x:auto;-webkit-overflow-scrolling:touch}
+            .data-table{min-width:600px}
         }
     </style>
 </head>
 <body>
-<div class="app-wrapper">
-    <aside class="sidebar">
-        <div class="sidebar-brand">
-            <img src="<?= h(url('images/ytc-logo.png')) ?>" alt="YTC Logo">
-            <div class="sidebar-brand-text">
-                <h2>Sports Database</h2>
-                <span>Yashoda Technical Campus</span>
-            </div>
-        </div>
-        <nav class="sidebar-nav">
-            <div class="sidebar-nav-label">Main</div>
-            <?php if (has_multiple_departments()): ?>
-                <a href="../faculty-select.php?change=1"><i class="bi bi-building"></i> <span>Select Faculty</span></a>
-            <?php endif; ?>
-            <a href="dashboard.php"><i class="bi bi-speedometer2"></i> <span>Dashboard</span></a>
-            <a href="../student-search.php"><i class="bi bi-search"></i> <span>Search Students</span></a>
-            <a href="../student-profile.php?new=1"><i class="bi bi-person-plus"></i> <span>Add Student</span></a>
-            <a href="provisional_list.php"><i class="bi bi-clipboard-check"></i> <span>Provisional Players</span></a>
-            <a href="final_list.php"><i class="bi bi-check-all"></i> <span>Final Teams</span></a>
-            <a href="eligibility_archive.php"><i class="bi bi-folder2-open"></i> <span>Eligibility Archive</span></a>
-            <a href="jersey_dashboard.php" class="active"><i class="bi bi-person-badge"></i> <span>Jersey Kit</span></a>
-            <a href="data_management.php"><i class="bi bi-database-fill-gear"></i> <span>Data Management</span></a>
-            <?php if (($me['role'] ?? '') === 'SUPER_ADMIN'): ?>
-                <div class="sidebar-nav-label">Site Content</div>
-                <a href="notices_list.php"><i class="bi bi-megaphone"></i> <span>Notices</span></a>
-                <a href="achievements_list.php"><i class="bi bi-trophy"></i> <span>Achievements</span></a>
-                <div class="sidebar-nav-label">Admin</div>
-                <a href="faculty_manage.php"><i class="bi bi-people-fill"></i> <span>Faculty Management</span></a>
-                <a href="document_requirements.php"><i class="bi bi-file-earmark-ruled"></i> <span>Document Requirements</span></a>
-            <?php endif; ?>
-            <div class="sidebar-nav-label">Site</div>
-            <a href="../index.php"><i class="bi bi-globe"></i> <span>View Website</span></a>
-        </nav>
-        <div class="sidebar-footer">
-            <div class="sidebar-user">
-                <div class="sidebar-user-avatar"><?= h(initials($me['full_name'])) ?></div>
-                <div class="sidebar-user-info">
-                    <h4><?= h($me['full_name']) ?></h4>
-                    <span><?= h($me['department_name'] ?? $me['role']) ?></span>
-                </div>
-                <a href="logout.php?_csrf=<?= h(csrf_token()) ?>" class="btn-logout" title="Logout"><i class="bi bi-box-arrow-right"></i></a>
-            </div>
-        </div>
-    </aside>
-
-    <main class="main-content">
-        <header class="top-bar">
-            <h2>Jersey Kit Dashboard</h2>
-            <span style="font-size:.82rem;color:var(--medium-gray)"><?= h($me['department_name'] ?? 'All Faculties') ?></span>
-        </header>
-
-        <div class="content-body">
-            <div class="page-header">
-                <h1>Jersey Kit Overview</h1>
-                <p>Open forms, share student links, and review jersey requests for every saved final team.</p>
-            </div>
-
-            <div class="stat-grid">
-                <div class="stat-card">
-                    <div class="stat-icon"><i class="bi bi-collection"></i></div>
-                    <div class="stat-info"><h3><?= $summary['teams'] ?></h3><p>Final Teams</p></div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon"><i class="bi bi-unlock"></i></div>
-                    <div class="stat-info"><h3><?= $summary['open'] ?></h3><p>Open Forms</p></div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon"><i class="bi bi-person-badge"></i></div>
-                    <div class="stat-info"><h3><?= $summary['requests'] ?></h3><p>Total Requests</p></div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon"><i class="bi bi-hourglass-split"></i></div>
-                    <div class="stat-info"><h3><?= $summary['pending'] ?></h3><p>Pending Review</p></div>
+    <div class="app-wrapper">
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <img src="<?= h(url('images/ytc-logo.png')) ?>" alt="YTC Logo">
+                <div class="sidebar-brand-text">
+                    <h2>Sports Database</h2>
+                    <span>Yashoda Technical Campus</span>
                 </div>
             </div>
-
-            <div class="data-card">
-                <div class="data-card-header">
-                    <h2><i class="bi bi-list-check"></i> Jersey Forms by Final Team</h2>
+            <nav class="sidebar-nav">
+                <div class="sidebar-nav-label">Main</div>
+                <?php if (has_multiple_departments()): ?>
+                    <a href="../faculty-select.php?change=1"><i class="bi bi-building"></i> <span>Select Faculty</span></a>
+                <?php endif; ?>
+                <a href="dashboard.php"><i class="bi bi-speedometer2"></i> <span>Dashboard</span></a>
+                <a href="../student-search.php"><i class="bi bi-search"></i> <span>Search Students</span></a>
+                <a href="../student-profile.php?new=1"><i class="bi bi-person-plus"></i> <span>Add Student</span></a>
+                <a href="provisional_list.php"><i class="bi bi-clipboard-check"></i> <span>Provisional Players</span></a>
+                <a href="final_list.php"><i class="bi bi-check-all"></i> <span>Final Teams</span></a>
+                <a href="eligibility_archive.php"><i class="bi bi-folder2-open"></i> <span>Eligibility Archive</span></a>
+                <a href="jersey_dashboard.php" class="active"><i class="bi bi-person-badge"></i> <span>Jersey Kit</span></a>
+                <a href="data_management.php"><i class="bi bi-database-fill-gear"></i> <span>Data Management</span></a>
+                <?php if (($me['role'] ?? '') === 'SUPER_ADMIN'): ?>
+                    <div class="sidebar-nav-label">Site Content</div>
+                    <a href="notices_list.php"><i class="bi bi-megaphone"></i> <span>Notices</span></a>
+                    <a href="achievements_list.php"><i class="bi bi-trophy"></i> <span>Achievements</span></a>
+                    <a href="committee_manage.php"><i class="bi bi-people-fill"></i> <span>Committee</span></a>
+                    <div class="sidebar-nav-label">Admin</div>
+                    <a href="faculty_manage.php"><i class="bi bi-people-fill"></i> <span>Faculty Management</span></a>
+                    <a href="document_requirements.php"><i class="bi bi-file-earmark-ruled"></i> <span>Document Requirements</span></a>
+                    <a href="sports_assign.php"><i class="bi bi-trophy-fill"></i> <span>Sports Assignment</span></a>
+                <?php endif; ?>
+                <div class="sidebar-nav-label">Site</div>
+                <a href="../index.php"><i class="bi bi-globe"></i> <span>View Website</span></a>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="sidebar-user">
+                    <div class="sidebar-user-avatar"><?= h(initials($me['full_name'])) ?></div>
+                    <div class="sidebar-user-info">
+                        <h4><?= h($me['full_name']) ?></h4>
+                        <span><?= h($me['department_name'] ?? $me['role']) ?></span>
+                    </div>
+                    <a href="logout.php?_csrf=<?= h(csrf_token()) ?>" class="btn-logout" title="Logout" aria-label="Logout"><i class="bi bi-box-arrow-right"></i></a>
                 </div>
-                <?php if (!$teams): ?>
-                    <div class="empty-row">
-                        <i class="bi bi-inbox"></i>
-                        No final teams are available yet. Create a final team first.
+            </div>
+        </aside>
+
+        <div class="main-content">
+            <header class="top-bar">
+                <h2 style="font-size:1rem;font-weight:600;color:var(--primary-navy);margin:0">Jersey Kit</h2>
+            </header>
+
+            <div class="content-body">
+                <div class="page-header">
+                    <h1>Jersey Kit</h1>
+                    <p>Look up a student's jersey number and size — stored on their own profile, filled in during the wizard.</p>
+                </div>
+
+                <?php if ($deptId === null || $deptId <= 0): ?>
+                    <div class="data-card">
+                        <div class="empty-row">
+                            <i class="bi bi-building"></i>
+                            Select a faculty to search its jersey details.<br><br>
+                            <a href="../faculty-select.php?change=1" class="btn btn-secondary btn-sm"><i class="bi bi-building"></i> Select Faculty</a>
+                        </div>
                     </div>
                 <?php else: ?>
-                    <div style="overflow-x:auto">
-                        <table class="data-table">
-                            <thead>
-                            <tr>
-                                <th>Team</th>
-                                <th>Players</th>
-                                <th>Form Status</th>
-                                <th>Requests</th>
-                                <th></th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            <?php foreach ($teams as $team): ?>
-                                <?php
-                                $team_gender = $team['gender'] ?? '';
-                                $team_gender_label = gender_list_options()[$team_gender] ?? 'Unspecified';
-                                $query = http_build_query(array_filter([
-                                    'game' => $team['game_name'],
-                                    'event' => $team['event_label'],
-                                    'ay' => $team['academic_year'] ?? '',
-                                    'gender' => $team_gender,
-                                    'dept' => $dept_id,
-                                ], static fn($value) => $value !== null && $value !== ''));
-                                ?>
-                                <tr>
-                                    <td>
-                                        <div class="team-name"><?= h($team['game_name']) ?> <span class="count-pill" style="background:rgba(26,54,93,.1);color:var(--primary-navy)"><?= h($team_gender_label) ?></span></div>
-                                        <div class="team-meta">
-                                            <?= h($team['event_label']) ?>
-                                            <?= !empty($team['academic_year']) ? ' · ' . h($team['academic_year']) : '' ?>
-                                        </div>
-                                    </td>
-                                    <td><strong><?= (int)$team['player_count'] ?></strong></td>
-                                    <td>
-                                        <?php if (!$team['form_id']): ?>
-                                            <span class="status-badge status-none"><i class="bi bi-dash-circle"></i> Not Created</span>
-                                        <?php elseif ((int)$team['is_open']): ?>
-                                            <span class="status-badge status-open"><i class="bi bi-unlock"></i> Open</span>
-                                        <?php else: ?>
-                                            <span class="status-badge status-closed"><i class="bi bi-lock"></i> Closed</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <div class="request-counts">
-                                            <span class="count-pill"><?= (int)$team['request_count'] ?> total</span>
-                                            <span class="count-pill pending"><?= (int)$team['pending_count'] ?> pending</span>
-                                            <span class="count-pill approved"><?= (int)$team['approved_count'] ?> approved</span>
-                                            <span class="count-pill rejected"><?= (int)$team['rejected_count'] ?> rejected</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <a href="jersey_manage.php?<?= h($query) ?>" class="btn-manage">
-                                            <i class="bi bi-sliders"></i> Manage
-                                        </a>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                            </tbody>
-                        </table>
+                    <form method="get" action="jersey_dashboard.php" class="toolbar">
+                        <div class="form-group">
+                            <label for="game">Sport</label>
+                            <select id="game" name="game">
+                                <option value="">All sports</option>
+                                <?php foreach ($catalog as $c): ?>
+                                    <option value="<?= h($c['game_code']) ?>" <?= $gameCode === $c['game_code'] ? 'selected' : '' ?>>
+                                        <?= h($c['display_name']) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="q">Student name / enrollment no.</label>
+                            <input type="text" id="q" name="q" value="<?= h($q) ?>" placeholder="Type to search&hellip;">
+                        </div>
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i> Search</button>
+                        <?php if ($gameCode !== '' || $q !== ''): ?>
+                            <a href="jersey_dashboard.php" class="btn btn-secondary"><i class="bi bi-x-circle"></i> Clear</a>
+                        <?php endif; ?>
+                    </form>
+
+                    <div class="data-card">
+                        <?php if (!$rows): ?>
+                            <div class="empty-row">
+                                <i class="bi bi-person-badge"></i>
+                                No matching students.
+                            </div>
+                        <?php else: ?>
+                            <div style="overflow-x:auto">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Enrollment No.</th>
+                                        <th>Sports</th>
+                                        <th>Jersey Size</th>
+                                        <th>Jersey Number</th>
+                                        <th>Shorts Size</th>
+                                        <th>Track Pant Size</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($rows as $r): ?>
+                                        <tr>
+                                            <td style="font-weight:600;color:var(--primary-navy)"><?= h($r['full_name']) ?></td>
+                                            <td><?= h($r['enrollment_no'] ?: '—') ?></td>
+                                            <td><?= render_sports_cell($r, $pickerDeptIds, $gamesByStudent) ?></td>
+                                            <td>
+                                                <?php if (trim((string)$r['jersey_size']) !== ''): ?>
+                                                    <span class="jersey-chip"><?= h($sizeLabels[$r['jersey_size']] ?? $r['jersey_size']) ?></span>
+                                                <?php else: ?>
+                                                    <span class="missing">Not set</span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <?php if (trim((string)$r['jersey_number']) !== ''): ?>
+                                                    <span class="jersey-chip"><i class="bi bi-hash"></i><?= h($r['jersey_number']) ?></span>
+                                                <?php else: ?>
+                                                    <span class="missing">Not set</span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <?php if (trim((string)$r['shorts_size']) !== ''): ?>
+                                                    <span class="jersey-chip"><?= h($shortsLabels[$r['shorts_size']] ?? $r['shorts_size']) ?></span>
+                                                <?php else: ?>
+                                                    <span class="missing">Not set</span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <?php if (trim((string)$r['track_size']) !== ''): ?>
+                                                    <span class="jersey-chip"><?= h($shortsLabels[$r['track_size']] ?? $r['track_size']) ?></span>
+                                                <?php else: ?>
+                                                    <span class="missing">Not set</span>
+                                                <?php endif; ?>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                            </div>
+                            <div class="pagination">
+                                <div class="info">Page <?= $page ?> of <?= $pages ?> · <?= $total ?> total</div>
+                                <div class="pages">
+                                    <?php
+                                    $base_q = http_build_query(array_filter(['game' => $gameCode, 'q' => $q]));
+                                    $prev = max(1, $page - 1);
+                                    $next = min($pages, $page + 1);
+                                    ?>
+                                    <a class="<?= $page <= 1 ? 'disabled' : '' ?>" aria-label="Previous page" href="?<?= h($base_q . '&page=' . $prev) ?>"><i class="bi bi-chevron-left"></i></a>
+                                    <?php for ($i = 1; $i <= $pages; $i++): ?>
+                                        <a class="<?= $i === $page ? 'active' : '' ?>" href="?<?= h($base_q . '&page=' . $i) ?>"><?= $i ?></a>
+                                    <?php endfor; ?>
+                                    <a class="<?= $page >= $pages ? 'disabled' : '' ?>" aria-label="Next page" href="?<?= h($base_q . '&page=' . $next) ?>"><i class="bi bi-chevron-right"></i></a>
+                                </div>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 <?php endif; ?>
             </div>
         </div>
-    </main>
-</div>
+    </div>
 </body>
 </html>

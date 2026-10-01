@@ -44,21 +44,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $ok  = flash_get('notice_saved');
 $err = flash_get('notice_error');
 
+$q    = trim((string)($_GET['q'] ?? ''));
+$page = max(1, (int)($_GET['page'] ?? 1));
+$per  = 50;
+
+$where  = '1=1';
+$params = [];
+$types  = '';
+if ($q !== '') {
+    $where   .= ' AND (n.title LIKE ? OR n.category LIKE ? OR n.summary LIKE ?)';
+    $params[] = '%' . $q . '%';
+    $params[] = '%' . $q . '%';
+    $params[] = '%' . $q . '%';
+    $types   .= 'sss';
+}
+
+$total = (int)(db_one("SELECT COUNT(*) AS n FROM notices n WHERE $where", $params, $types)['n'] ?? 0);
+$pages = max(1, (int)ceil($total / $per));
+if ($page > $pages) $page = $pages;
+$offset = ($page - 1) * $per;
+
 $notices = db_select(
     "SELECT n.*, f.full_name AS poster_name
        FROM notices n
        LEFT JOIN faculty f ON f.id = n.posted_by
-      ORDER BY n.notice_date DESC, n.id DESC"
+      WHERE $where
+      ORDER BY n.notice_date DESC, n.id DESC
+      LIMIT $per OFFSET $offset",
+    $params, $types
 );
-
-$q = trim((string)($_GET['q'] ?? ''));
-if ($q !== '') {
-    $notices = array_values(array_filter($notices, function ($n) use ($q) {
-        return stripos($n['title'], $q) !== false
-            || stripos((string)$n['category'], $q) !== false
-            || stripos((string)$n['summary'], $q) !== false;
-    }));
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -116,6 +130,13 @@ if ($q !== '') {
         .data-table td{padding:.75rem 1rem;font-size:.88rem;border-bottom:1px solid var(--light-gray);color:var(--text-dark);vertical-align:middle}
         .data-table tr:last-child td{border-bottom:none}
         .data-table tr:hover{background:var(--off-white)}
+        .pagination{padding:1rem 1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;border-top:1px solid var(--light-gray)}
+        .pagination .info{font-size:.85rem;color:var(--medium-gray)}
+        .pagination .pages{display:flex;gap:.25rem}
+        .pagination .pages a{padding:.35rem .65rem;border:1px solid var(--light-gray);border-radius:4px;font-size:.85rem;color:var(--primary-navy);text-decoration:none;background:var(--white)}
+        .pagination .pages a:hover{background:var(--off-white)}
+        .pagination .pages a.active{background:var(--primary-navy);color:var(--white);border-color:var(--primary-navy)}
+        .pagination .pages a.disabled{opacity:.4;pointer-events:none}
         .badge{display:inline-block;padding:.2rem .6rem;border-radius:4px;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px}
         .badge-published{background:rgba(25,135,84,.12);color:#0a3622}
         .badge-draft{background:rgba(108,117,125,.15);color:#495057}
@@ -174,10 +195,12 @@ if ($q !== '') {
                 <div class="sidebar-nav-label">Site Content</div>
                 <a href="notices_list.php" class="active"><i class="bi bi-megaphone"></i> <span>Notices</span></a>
                 <a href="achievements_list.php"><i class="bi bi-trophy"></i> <span>Achievements</span></a>
+                <a href="committee_manage.php"><i class="bi bi-people-fill"></i> <span>Committee</span></a>
                 <?php if ($me['role'] === 'SUPER_ADMIN'): ?>
                     <div class="sidebar-nav-label">Admin</div>
                     <a href="faculty_manage.php"><i class="bi bi-people-fill"></i> <span>Faculty Management</span></a>
                     <a href="document_requirements.php"><i class="bi bi-file-earmark-ruled"></i> <span>Document Requirements</span></a>
+                    <a href="sports_assign.php"><i class="bi bi-trophy-fill"></i> <span>Sports Assignment</span></a>
                 <?php endif; ?>
                 <div class="sidebar-nav-label">Site</div>
                 <a href="../index.php"><i class="bi bi-globe"></i> <span>View Website</span></a>
@@ -189,7 +212,7 @@ if ($q !== '') {
                         <h4><?= h($me['full_name']) ?></h4>
                         <span><?= h($me['department_name'] ?? $me['role']) ?></span>
                     </div>
-                    <a href="logout.php?_csrf=<?= h(csrf_token()) ?>" class="btn-logout" title="Logout"><i class="bi bi-box-arrow-right"></i></a>
+                    <a href="logout.php?_csrf=<?= h(csrf_token()) ?>" class="btn-logout" title="Logout" aria-label="Logout"><i class="bi bi-box-arrow-right"></i></a>
                 </div>
             </div>
         </aside>
@@ -200,8 +223,8 @@ if ($q !== '') {
             </header>
 
             <div class="content-body">
-                <?php if ($ok):  ?><div class="alert-banner success"><i class="bi bi-check-circle"></i> <?= h($ok['msg']) ?></div><?php endif; ?>
-                <?php if ($err): ?><div class="alert-banner error"><i class="bi bi-exclamation-circle"></i> <?= h($err['msg']) ?></div><?php endif; ?>
+                <?php if ($ok):  ?><div class="alert-banner success" role="alert"><i class="bi bi-check-circle"></i> <?= h($ok['msg']) ?></div><?php endif; ?>
+                <?php if ($err): ?><div class="alert-banner error" role="alert"><i class="bi bi-exclamation-circle"></i> <?= h($err['msg']) ?></div><?php endif; ?>
 
                 <div class="page-header">
                     <div>
@@ -213,10 +236,10 @@ if ($q !== '') {
 
                 <div class="data-card">
                     <div class="data-card-header">
-                        <h2><i class="bi bi-pin-angle"></i> All Notices (<?= count($notices) ?>)</h2>
+                        <h2><i class="bi bi-pin-angle"></i> All Notices (<?= $total ?>)</h2>
                         <form method="get" class="search-form" action="notices_list.php">
                             <input type="text" name="q" value="<?= h($q) ?>" placeholder="Search title, category, summary…">
-                            <button type="submit" class="btn btn-secondary" style="padding:.5rem .75rem"><i class="bi bi-search"></i></button>
+                            <button type="submit" class="btn btn-secondary" style="padding:.5rem .75rem" aria-label="Search"><i class="bi bi-search"></i></button>
                         </form>
                     </div>
 
@@ -281,7 +304,7 @@ if ($q !== '') {
                                                 <?= csrf_field() ?>
                                                 <input type="hidden" name="do" value="delete">
                                                 <input type="hidden" name="id" value="<?= (int)$n['id'] ?>">
-                                                <button class="btn btn-danger" style="padding:.3rem .6rem;font-size:.78rem"><i class="bi bi-trash"></i></button>
+                                                <button class="btn btn-danger" style="padding:.3rem .6rem;font-size:.78rem" aria-label="Delete notice — <?= h($n['title']) ?>"><i class="bi bi-trash"></i></button>
                                             </form>
                                         </div>
                                     </td>
@@ -289,6 +312,21 @@ if ($q !== '') {
                             <?php endforeach; ?>
                             </tbody>
                         </table>
+                        <div class="pagination">
+                            <div class="info">Page <?= $page ?> of <?= $pages ?> · <?= $total ?> total</div>
+                            <div class="pages">
+                                <?php
+                                $base_q = http_build_query(array_filter(['q' => $q]));
+                                $prev = max(1, $page - 1);
+                                $next = min($pages, $page + 1);
+                                ?>
+                                <a class="<?= $page <= 1 ? 'disabled' : '' ?>" aria-label="Previous page" href="?<?= h($base_q . '&page=' . $prev) ?>"><i class="bi bi-chevron-left"></i></a>
+                                <?php for ($i = 1; $i <= $pages; $i++): ?>
+                                    <a class="<?= $i === $page ? 'active' : '' ?>" href="?<?= h($base_q . '&page=' . $i) ?>"><?= $i ?></a>
+                                <?php endfor; ?>
+                                <a class="<?= $page >= $pages ? 'disabled' : '' ?>" aria-label="Next page" href="?<?= h($base_q . '&page=' . $next) ?>"><i class="bi bi-chevron-right"></i></a>
+                            </div>
+                        </div>
                     <?php endif; ?>
                 </div>
             </div>

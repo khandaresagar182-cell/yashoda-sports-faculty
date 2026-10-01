@@ -263,7 +263,7 @@ $flash = flash_get('dashboard_info');
 
         <aside class="sidebar">
             <div class="sidebar-brand">
-                <img src="<?= h(url('images/ytc-logo.png')) ?>" alt="YTC Logo">
+                <img src="<?= h(url('images/ytc-logo.png')) ?>" alt="YTC Logo" width="42" height="42">
                 <div class="sidebar-brand-text">
                     <h2>Sports Database</h2>
                     <span>Yashoda Technical Campus</span>
@@ -294,6 +294,17 @@ $flash = flash_get('dashboard_info');
                 <a href="eligibility_archive.php">
                     <i class="bi bi-folder2-open"></i> <span>Eligibility Archive</span>
                 </a>
+                <div class="sidebar-nav-label">External Entries</div>
+                <a href="external_entries.php">
+                    <i class="bi bi-link-45deg"></i> <span>Links &amp; Entries</span>
+                </a>
+                <a href="external_final_team.php">
+                    <i class="bi bi-people"></i> <span>External Final Team</span>
+                </a>
+                <a href="external_eligibility_archive.php">
+                    <i class="bi bi-folder2"></i> <span>External Archive</span>
+                </a>
+                <div class="sidebar-nav-label">Other</div>
                 <a href="jersey_dashboard.php">
                     <i class="bi bi-person-badge"></i> <span>Jersey Kit</span>
                 </a>
@@ -308,6 +319,9 @@ $flash = flash_get('dashboard_info');
                     <a href="achievements_list.php">
                         <i class="bi bi-trophy"></i> <span>Achievements</span>
                     </a>
+                    <a href="committee_manage.php">
+                        <i class="bi bi-people-fill"></i> <span>Committee</span>
+                    </a>
                 <?php endif; ?>
                 <?php if ($me['role'] === 'SUPER_ADMIN'): ?>
                     <div class="sidebar-nav-label">Admin</div>
@@ -316,6 +330,9 @@ $flash = flash_get('dashboard_info');
                     </a>
                     <a href="document_requirements.php">
                         <i class="bi bi-file-earmark-ruled"></i> <span>Document Requirements</span>
+                    </a>
+                    <a href="sports_assign.php">
+                        <i class="bi bi-trophy-fill"></i> <span>Sports Assignment</span>
                     </a>
                 <?php endif; ?>
                 <div class="sidebar-nav-label">Site</div>
@@ -330,7 +347,7 @@ $flash = flash_get('dashboard_info');
                         <h4><?= h($me['full_name']) ?></h4>
                         <span><?= h($me['department_name'] ?? $me['role']) ?></span>
                     </div>
-                    <a href="logout.php?_csrf=<?= h(csrf_token()) ?>" class="btn-logout" title="Logout">
+                    <a href="logout.php?_csrf=<?= h(csrf_token()) ?>" class="btn-logout" title="Logout" aria-label="Logout">
                         <i class="bi bi-box-arrow-right"></i>
                     </a>
                 </div>
@@ -356,7 +373,7 @@ $flash = flash_get('dashboard_info');
                 </div>
 
                 <?php if ($flash): ?>
-                    <div class="alert-banner <?= h($flash['level']) ?>">
+                    <div class="alert-banner <?= h($flash['level']) ?>" role="alert">
                         <i class="bi bi-info-circle"></i> <?= h($flash['msg']) ?>
                     </div>
                 <?php endif; ?>
@@ -490,7 +507,7 @@ $flash = flash_get('dashboard_info');
                                                 <td>
                                                     <div class="student-cell">
                                                         <?php if (!empty($r['photo_path']) && is_file(__DIR__ . '/../' . $r['photo_path'])): ?>
-                                                            <img src="<?= h(url($r['photo_path'])) ?>" alt="" class="student-avatar" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0">
+                                                            <img src="<?= h(url($r['photo_path'])) ?>" alt="" class="student-avatar" width="36" height="36" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0">
                                                         <?php else: ?>
                                                             <div class="student-avatar"><?= h(initials($r['full_name'])) ?></div>
                                                         <?php endif; ?>
@@ -516,8 +533,8 @@ $flash = flash_get('dashboard_info');
                                                 </td>
                                                 <td>
                                                     <div class="row-action-btns">
-                                                        <a class="row-action-btn" title="View profile" href="../student-profile.php?id=<?= (int)$r['id'] ?>"><i class="bi bi-eye"></i></a>
-                                                        <a class="row-action-btn edit" title="Edit" href="../student-profile.php?id=<?= (int)$r['id'] ?>#formMode"><i class="bi bi-pencil"></i></a>
+                                                        <a class="row-action-btn" title="View profile" aria-label="View profile — <?= h($r['full_name']) ?>" href="../student-profile.php?id=<?= (int)$r['id'] ?>"><i class="bi bi-eye"></i></a>
+                                                        <a class="row-action-btn edit" title="Edit" aria-label="Edit — <?= h($r['full_name']) ?>" href="../student-profile.php?id=<?= (int)$r['id'] ?>#formMode"><i class="bi bi-pencil"></i></a>
                                                     </div>
                                                 </td>
                                             </tr>

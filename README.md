@@ -2,7 +2,7 @@
 
 A PHP + MySQL web application for **YSPM's Yashoda Technical Campus, Satara —
 Faculty of Sports**. Manages student registrations, sport selections,
-achievements, jersey requests, and inter-college team rosters across
+achievements, jersey kit details, and inter-college team rosters across
 multiple departments (Engineering, Polytechnic, Pharmacy, D.Pharm,
 Architecture, Management).
 
@@ -21,10 +21,10 @@ Architecture, Management).
 | `admin/` | Super-admin pages (dashboard, faculty/student management, exports) |
 | `api/` | JSON endpoints (department requirements, document status) |
 | `includes/` | `bootstrap.php` (entry), `db.php` (mysqli helpers), `helpers.php`, `csrf.php`, `auth.php`, `upload.php`, `seed_check.php` |
-| `sql/` | `schema.sql`, `seed.sql`, all `migration-v*.sql`, `seed.ready.sql` (generated) |
+| `sql/` | `schema.sql`, `seed.ready.sql`, all `migration-v*.sql` |
 | `css/`, `images/`, `uploads/` | Static assets and writable user content |
-| `scripts/init_database.php` | One-shot CLI initializer (used by Railway) |
-| `.htaccess` | Denies direct access to `/includes` and `/sql` |
+| `scripts/build-namecheap-zip.ps1` | Builds the production zip for the Namecheap cPanel deploy (excluded from the zip itself) |
+| `.htaccess` | Denies direct web access to `/includes`, `/sql`, `/sessions`, `/scripts`, `/docs`, `/vendor` and `*.md` / `*.ps1` |
 
 ## Installation
 
@@ -51,20 +51,28 @@ done
 
 Default login: `admin` / `Admin@123` (super-admin), or
 `eng_faculty` / `poly_faculty` / `pharm_faculty` with password `Faculty@123`.
-**Change all four before going to production.**
+**Change all of the seeded passwords before going to production.** Once
+signed in, `includes/seed_check.php` shows a warning banner for as long as a
+seeded account still accepts its documented default (super-admin sees every
+such account; a faculty user sees only their own).
 
 ## Deployment
 
-Three supported targets, all documented in [INSTALL.md](INSTALL.md):
+Production runs on **Namecheap cPanel**. The zip is built locally with
+`pwsh -ExecutionPolicy Bypass -File scripts/build-namecheap-zip.ps1`
+(output in `build/`, git-ignored — a generated artifact, not source), uploaded
+through cPanel File Manager, and database migrations are applied by pasting the
+SQL in `sql/` into phpMyAdmin. The zip deliberately does **not** contain
+`db_setup.php` / `db_migrate_*.php`, `README.md`, `scripts/` or `docs/`; build
+with `-IncludeSetup` only for a deploy that must run the setup script, and
+delete it from the server straight afterwards.
 
-- **XAMPP / local dev** — section 2
-- **cPanel / shared hosting** — section 3
-- **Railway** — see [RAILWAY.md](RAILWAY.md); the `scripts/init_database.php` is
-  the auto-init entrypoint.
+Other targets are documented, but describe hosts no longer in use — see the
+notes at the top of [INSTALL.md](INSTALL.md), [DEPLOY.md](DEPLOY.md) and
+[RAILWAY.md](RAILWAY.md):
 
-For cPanel, the deployment bundle lives at
-`build/college-sports-faculty-godaddy/` (kept locally; not in this repo
-because it's a generated artifact, not source).
+- **XAMPP / local dev** — INSTALL.md section 2
+- **DigitalOcean / Railway** — historical
 
 ## Database
 
@@ -77,7 +85,7 @@ Single database `csf_portal`. Tables:
 - `notices`, `achievements` — homepage content
 - `hero_settings`, `college_settings` — site config
 - `login_attempts`, `password_resets` — security
-- `provisional_entries`, `final_teams`, `jersey_forms`, `jersey_requests` — team + jersey flows
+- `provisional_entries`, `final_teams` — team flows; jersey number/size live directly on `students`
 - `contact_messages` — contact form
 
 Schema lives at `sql/schema.sql`; incremental changes are in

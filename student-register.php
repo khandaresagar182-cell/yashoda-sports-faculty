@@ -61,6 +61,7 @@ if ($old) unset($_SESSION['_register_old']);
         .register-page { flex:1; display:flex; align-items:center; justify-content:center; padding:2rem 1rem; position:relative; overflow:hidden; }
         .register-page::before { content:''; position:absolute; inset:-50%; background: radial-gradient(circle at 20% 50%, rgba(201,162,39,.08) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(114,47,55,.06) 0%, transparent 50%); animation: bgShift 15s ease-in-out infinite alternate; }
         @keyframes bgShift { 0% { transform: translate(0,0) rotate(0deg); } 100% { transform: translate(-3%,-3%) rotate(2deg); } }
+        @media (prefers-reduced-motion: reduce) { .register-page::before { animation: none; } }
         .register-card { position:relative; z-index:1; width:100%; max-width:520px; background:#fff; border-radius:14px; box-shadow:0 12px 40px rgba(0,0,0,.25), 0 4px 12px rgba(0,0,0,.15); overflow:hidden; animation: cardEntry .6s ease-out; }
         @keyframes cardEntry { from { opacity:0; transform: translateY(30px) scale(.97); } to { opacity:1; transform: translateY(0) scale(1); } }
         .register-card-header { background: linear-gradient(135deg, var(--primary-navy), var(--primary-navy-dark)); padding:1.4rem 1.5rem 1.2rem; text-align:center; position:relative; }
@@ -131,7 +132,7 @@ if ($old) unset($_SESSION['_register_old']);
                     </div>
                 <?php endif; ?>
 
-                <form method="post" action="register_process.php" novalidate>
+                <form method="post" action="register_process.php">
                     <?= csrf_field() ?>
 
                     <div class="form-row">
@@ -186,7 +187,7 @@ if ($old) unset($_SESSION['_register_old']);
                                    maxlength="160"
                                    placeholder="you@example.com"
                                    value="<?= h($old['email'] ?? '') ?>">
-                            <div class="hint">This will be your username.</div>
+                            <div class="hint">This will be your username. Accepted providers: Gmail, Yahoo, Outlook, iCloud, Rediff.</div>
                         </div>
                         <div class="form-group">
                             <label for="mobile">Mobile No. *</label>
@@ -267,6 +268,36 @@ if ($old) unset($_SESSION['_register_old']);
                 var parts = [sn, fn, mn].map(function (s) { return s.trim(); }).filter(Boolean);
                 document.getElementById('full_name_field').value = parts.join(' ');
             });
+        })();
+    </script>
+    <script>
+        // Mirrors the server-side domain whitelist in register_process.php
+        // (see allowed_student_email_domains() in includes/helpers.php) so
+        // students get an immediate, friendly error instead of a round trip.
+        (function () {
+            var ALLOWED_DOMAINS = ['gmail.com', 'yahoo.com', 'outlook.com', 'icloud.com', 'rediff.com'];
+            var input = document.getElementById('email');
+            if (!input) return;
+
+            function domainOf(value) {
+                var at = value.lastIndexOf('@');
+                return at === -1 ? '' : value.slice(at + 1).toLowerCase();
+            }
+
+            function validate() {
+                var domain = domainOf(input.value.trim());
+                if (domain && ALLOWED_DOMAINS.indexOf(domain) === -1) {
+                    input.setCustomValidity(
+                        'Please use an email from one of these providers: ' +
+                        ALLOWED_DOMAINS.map(function (d) { return '@' + d; }).join(', ') + '.'
+                    );
+                } else {
+                    input.setCustomValidity('');
+                }
+            }
+
+            input.addEventListener('input', validate);
+            input.addEventListener('blur', validate);
         })();
     </script>
 </body>

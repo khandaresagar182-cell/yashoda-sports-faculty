@@ -147,10 +147,12 @@ if (!$is_new && $id > 0) {
                 <div class="sidebar-nav-label">Site Content</div>
                 <a href="notices_list.php" class="active"><i class="bi bi-megaphone"></i> <span>Notices</span></a>
                 <a href="achievements_list.php"><i class="bi bi-trophy"></i> <span>Achievements</span></a>
+                <a href="committee_manage.php"><i class="bi bi-people-fill"></i> <span>Committee</span></a>
                 <?php if ($me['role'] === 'SUPER_ADMIN'): ?>
                     <div class="sidebar-nav-label">Admin</div>
                     <a href="faculty_manage.php"><i class="bi bi-people-fill"></i> <span>Faculty Management</span></a>
                     <a href="document_requirements.php"><i class="bi bi-file-earmark-ruled"></i> <span>Document Requirements</span></a>
+                    <a href="sports_assign.php"><i class="bi bi-trophy-fill"></i> <span>Sports Assignment</span></a>
                 <?php endif; ?>
                 <div class="sidebar-nav-label">Site</div>
                 <a href="../index.php"><i class="bi bi-globe"></i> <span>View Website</span></a>
@@ -176,7 +178,7 @@ if (!$is_new && $id > 0) {
             </header>
 
             <div class="content-body">
-                <?php if ($err): ?><div class="alert-banner error"><i class="bi bi-exclamation-circle"></i> <?= h($err['msg']) ?></div><?php endif; ?>
+                <?php if ($err): ?><div class="alert-banner error" role="alert"><i class="bi bi-exclamation-circle"></i> <?= h($err['msg']) ?></div><?php endif; ?>
 
                 <div class="page-header">
                     <h1><?= $is_new ? 'Add Notice' : 'Edit Notice' ?></h1>
@@ -189,27 +191,27 @@ if (!$is_new && $id > 0) {
                     <div class="form-section">
                         <h3><i class="bi bi-card-text"></i> Notice Content</h3>
                         <div class="form-group" style="margin-bottom:1rem">
-                            <label>Title <span class="req">*</span></label>
-                            <input type="text" name="title" required maxlength="255" value="<?= h($notice['title']) ?>" placeholder="e.g. Annual Sports Meet 2026 — Registration Open">
+                            <label for="title">Title <span class="req">*</span></label>
+                            <input type="text" id="title" name="title" required maxlength="255" value="<?= h($notice['title']) ?>" placeholder="e.g. Annual Sports Meet 2026 — Registration Open">
                         </div>
                         <div class="form-grid">
                             <div class="form-group">
-                                <label>Category</label>
-                                <input type="text" name="category" maxlength="60" value="<?= h($notice['category']) ?>" placeholder="e.g. Urgent, New, General, Tournament">
+                                <label for="category">Category</label>
+                                <input type="text" id="category" name="category" maxlength="60" value="<?= h($notice['category']) ?>" placeholder="e.g. Urgent, New, General, Tournament">
                                 <span class="hint">Drives the badge color on the public site.</span>
                             </div>
                             <div class="form-group">
-                                <label>Notice Date <span class="req">*</span></label>
-                                <input type="date" name="notice_date" required value="<?= h($notice['notice_date']) ?>">
+                                <label for="notice_date">Notice Date <span class="req">*</span></label>
+                                <input type="date" id="notice_date" name="notice_date" required value="<?= h($notice['notice_date']) ?>">
                             </div>
                         </div>
                         <div class="form-group" style="margin-top:1rem">
-                            <label>Summary</label>
-                            <input type="text" name="summary" maxlength="500" value="<?= h($notice['summary']) ?>" placeholder="Short one-liner shown in the meta line">
+                            <label for="summary">Summary</label>
+                            <input type="text" id="summary" name="summary" maxlength="500" value="<?= h($notice['summary']) ?>" placeholder="Short one-liner shown in the meta line">
                         </div>
                         <div class="form-group" style="margin-top:1rem">
-                            <label>Full Body</label>
-                            <textarea name="body" rows="6" placeholder="Full notice content…"><?= h($notice['body']) ?></textarea>
+                            <label for="body">Full Body</label>
+                            <textarea id="body" name="body" rows="6" placeholder="Full notice content…"><?= h($notice['body']) ?></textarea>
                             <span class="hint">Optional. Used for the full notice detail page (if linked).</span>
                         </div>
                     </div>

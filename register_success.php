@@ -37,6 +37,7 @@ $expired = !$pending;
         .success-page::before { content:''; position:absolute; inset:-50%; background: radial-gradient(circle at 30% 40%, rgba(40,167,69,.12) 0%, transparent 50%), radial-gradient(circle at 70% 70%, rgba(201,162,39,.08) 0%, transparent 50%); }
         .success-card { position:relative; z-index:1; width:100%; max-width:520px; background:#fff; border-radius:14px; box-shadow:0 12px 40px rgba(0,0,0,.25), 0 4px 12px rgba(0,0,0,.15); overflow:hidden; animation: cardEntry .6s ease-out; }
         @keyframes cardEntry { from { opacity:0; transform: translateY(30px) scale(.97); } to { opacity:1; transform: translateY(0) scale(1); } }
+        @media (prefers-reduced-motion: reduce) { .success-card { animation: none; } }
         .success-header { background: linear-gradient(135deg, #1e7e34, #155724); padding:1.6rem 1.5rem 1.4rem; text-align:center; position:relative; }
         .success-header::after { content:''; position:absolute; bottom:0; left:0; right:0; height:4px; background: linear-gradient(90deg, var(--accent-gold), var(--accent-maroon), var(--accent-gold)); }
         .success-icon { width:64px; height:64px; background: rgba(255,255,255,.15); border:2px solid rgba(255,255,255,.4); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto .7rem; }
@@ -85,7 +86,7 @@ $expired = !$pending;
                         <div class="warning-box" style="background: rgba(25,135,84,.1); border-color: rgba(25,135,84,.3); color:#0a3622">
                             <i class="bi bi-envelope-check-fill" style="color:#198754"></i>
                             We've sent a verification link to <strong><?= h($pending['email']) ?></strong>.
-                            Open it and choose a password to finish creating your account.
+                            Open it to activate your account — your login will be created automatically.
                         </div>
                     <?php else: ?>
                         <div class="warning-box">

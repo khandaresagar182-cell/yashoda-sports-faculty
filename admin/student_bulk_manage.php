@@ -144,7 +144,9 @@ db_execute("DELETE FROM provisional_entries WHERE student_id IN ($ph)", $ids, $i
 db_execute("DELETE FROM final_teams WHERE student_id IN ($ph)", $ids, $itype);
 db_execute(
     "UPDATE students SET photo_path = NULL, bank_account_number = NULL, bank_name = NULL,
-        bank_branch = NULL, bank_ifsc = NULL, form_step = NULL, form_submitted_at = NULL,
+        bank_branch = NULL, bank_ifsc = NULL, jersey_number = NULL, jersey_size = NULL,
+        shorts_size = NULL, track_size = NULL,
+        form_step = NULL, form_submitted_at = NULL,
         edit_unlocked = 0
      WHERE id IN ($ph)",
     $ids, $itype

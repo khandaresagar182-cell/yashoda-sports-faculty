@@ -55,6 +55,12 @@ if ($mother_name === '' || strlen($mother_name) > 100) {
 }
 if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 160) {
     $errors[] = 'Please enter a valid email address.';
+} elseif (!is_allowed_student_email($email)) {
+    $allowed = implode(', ', array_map(
+        fn(string $d): string => '@' . $d,
+        allowed_student_email_domains()
+    ));
+    $errors[] = "Registration is only accepted from these email providers: {$allowed}. Please use a personal email address from one of these providers.";
 }
 if (!preg_match('/^[0-9]{10}$/', $mobile)) {
     $errors[] = 'Mobile number must be exactly 10 digits.';
