@@ -1039,6 +1039,9 @@ a:hover {
 }
 .achievement-image-wrapper {
     position: relative;
+    /* Explicit width: with width:auto, aspect-ratio turns max-height into a
+       max-width (520 × 16/7 ≈ 1188px), leaving a blank strip on wide screens. */
+    width: 100%;
     aspect-ratio: 16 / 7;
     min-height: 380px;
     max-height: 520px;
