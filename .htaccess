@@ -8,7 +8,9 @@ Options -Indexes
 #   2. App served from the docroot   (Namecheap/GoDaddy cPanel / public_html/)
 
 # Always block the credentials file and sensitive files no matter where the app lives.
-<FilesMatch "^(config\.local\.php|config\.local\.example\.php|\.user\.ini|php_errors\.log)$">
+# .ftp-deploy-sync-state.json is written by the GitHub auto-deploy and lists
+# every deployed file with its hash.
+<FilesMatch "^(config\.local\.php|config\.local\.example\.php|\.user\.ini|php_errors\.log|\.ftp-deploy-sync-state\.json)$">
     Require all denied
 </FilesMatch>
 

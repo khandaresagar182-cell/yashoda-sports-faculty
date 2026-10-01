@@ -205,6 +205,33 @@ The current forgot-password flow logs the reset link to `mail.log` next to the p
 
 Modify `forgot_process.php` to call `mail()` (cPanel usually has this preconfigured) or `PHPMailer`. The current code already writes the link to `mail.log` so you can wire it up later.
 
+### 3.6 Automatic updates from GitHub
+
+After the first install, code updates no longer need the zip. Every push to
+`main` runs `.github/workflows/deploy-namecheap.yml`, which uploads only the
+changed files over FTPS. It never touches `vendor/`, `uploads/`, `sessions/`,
+`includes/config.local.php` or `.user.ini` on the server, and it never ships
+`db_*.php`.
+
+One-time setup:
+
+1. cPanel → **FTP Accounts** → create a dedicated account (e.g.
+   `deploy@your-domain.com`) whose directory is the app folder
+   (e.g. `public_html`).
+2. Note the server hostname from the cPanel sidebar
+   (e.g. `server123.web-hosting.com`).
+3. GitHub repo → **Settings → Secrets and variables → Actions** → add
+   `FTP_SERVER` (that hostname), `FTP_USERNAME`, `FTP_PASSWORD`, and
+   `FTP_SERVER_DIR` = `./`.
+4. Push, or run it by hand from the **Actions** tab → *Deploy to Namecheap* →
+   **Run workflow**.
+
+Deploys that change the schema still need the matching `db_migrate_vNN.php`
+uploaded by hand (File Manager) and run once — it self-deletes.
+
+Files deleted from the repo are removed from the server only if this workflow
+uploaded them. Anything left over from older zip uploads must be deleted by hand.
+
 ## 4. Verification checklist
 
 After install, walk through these in order:

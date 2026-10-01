@@ -1,0 +1,101 @@
+# Auto-deploy to Namecheap cPanel over FTPS on every push to main.
+#
+# Replaces the manual zip upload (scripts/build-namecheap-zip.ps1) for code
+# updates. Only files tracked in git are uploaded, and only the ones that
+# changed since the last deploy — the action keeps a .ftp-deploy-sync-state.json
+# on the server to know what it sent last time (.htaccess denies web access to
+# it). Files on the server that this workflow never uploaded — vendor/,
+# uploads/, sessions/, includes/config.local.php, .user.ini — are never touched.
+#
+# One-off DB scripts (db_setup.php, db_migrate_vNN.php) are excluded, same as
+# the zip build. Run a migration by uploading that one db_migrate_vNN.php via
+# cPanel File Manager; it is token-gated and self-deletes on success.
+#
+# Required repo secrets (GitHub → Settings → Secrets and variables → Actions):
+#   FTP_SERVER      server hostname from cPanel, e.g. server123.web-hosting.com
+#                   (must match the TLS certificate — not ftp.<your-domain>)
+#   FTP_USERNAME    a cPanel FTP account, e.g. deploy@your-domain.com
+#   FTP_PASSWORD    that account's password
+#   FTP_SERVER_DIR  app folder relative to the FTP account's home, ending in "/"
+#                   ("./" if the FTP account's directory IS the app folder)
+
+name: Deploy to Namecheap
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'tests/**'
+      - 'scripts/**'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-namecheap
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check FTP secrets are set
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
+        run: |
+          missing=""
+          for v in FTP_SERVER FTP_USERNAME FTP_PASSWORD FTP_SERVER_DIR; do
+            [ -n "${!v}" ] || missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repo secrets:$missing (Settings → Secrets and variables → Actions)"
+            exit 1
+          fi
+          case "$FTP_SERVER_DIR" in
+            */) ;;
+            *) echo "::error::FTP_SERVER_DIR must end with '/'"; exit 1 ;;
+          esac
+
+      - uses: actions/checkout@v4
+
+      - name: Upload changed files over FTPS
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          server-dir: ${{ secrets.FTP_SERVER_DIR }}
+          protocol: ftps
+          security: strict
+          # Mirrors the exclusions in scripts/build-namecheap-zip.ps1. Setting
+          # this replaces the action's defaults, so the .git ones are repeated.
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            .claude/**
+            .agents/**
+            .codex/**
+            .vscode/**
+            .idea/**
+            build/**
+            tests/**
+            docs/**
+            scripts/**
+            backups/**
+            _quarantine/**
+            uploads/**
+            sessions/**
+            vendor/**
+            db_*.php
+            *.sql
+            **/*.md
+            **/*.ps1
+            skills-lock.json
+            .user.ini
+            .env*
+            includes/config.local.php
